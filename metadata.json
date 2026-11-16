@@ -1,0 +1,11 @@
+{
+  "name": "Electrostatics Studio",
+  "version": "1.0",
+  "author": "Keith Chapman",
+  "year": 2026,
+  "designedWith": "Google AI Studio",
+  "credits": "Designed by Keith Chapman 2026 v1.0 using Google AI Studio",
+  "description": "High-fidelity physics & chemistry electrostatics simulation featuring friction charging, point charges, Coulomb force calculations, electric fields, equipotential lines, real-time sensors, and AI tutor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
