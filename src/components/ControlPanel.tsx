@@ -7,6 +7,7 @@ import {
   ModuleMode,
 } from '../types/electrostatics';
 import { MATERIALS_DATABASE } from '../physics/materialsData';
+import { getElectroscopeGuideState } from '../utils/electroscopeGuide';
 import {
   updateSurfaceChargeDots,
   getAirBreakdownThreshold,
@@ -31,6 +32,7 @@ import {
   Crosshair,
   RefreshCw,
   Grid3x3,
+  Gauge,
 } from 'lucide-react';
 
 interface ControlPanelProps {
@@ -49,6 +51,8 @@ interface ControlPanelProps {
   onSingleRub: (objectId: string) => void;
   onClearSlot: (slotIndex: 0 | 1) => void;
   onResetScene: () => void;
+  guidedElectroscopeMode?: boolean;
+  onToggleGuidedElectroscope?: () => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -67,6 +71,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onSingleRub,
   onClearSlot,
   onResetScene,
+  guidedElectroscopeMode = true,
+  onToggleGuidedElectroscope,
 }) => {
   const selectedObject = objects.find((o) => o.id === selectedObjectId) || (moduleMode === 'module1' ? objects[0] : undefined);
   const selectedMat = selectedObject ? MATERIALS_DATABASE[selectedObject.materialId] : null;
@@ -122,11 +128,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     const isObj2Active = obj2 ? selectedObjectId === obj2.id : false;
     const waitingForObj1 = !obj1 && !obj2;
     const needsObj2Now = Boolean(obj1) && !obj2;
-    const materialList = Object.values(MATERIALS_DATABASE);
+    const materialList = Object.values(MATERIALS_DATABASE).filter((m) => m.id !== 'electroscope');
 
     return (
       <aside
-        className={`w-full lg:w-[244px] xl:w-[260px] h-full bg-slate-900/95 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-hidden border transition-all ${
+        className={`w-full lg:w-[258px] xl:w-[274px] h-full bg-slate-900/95 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-hidden border transition-all ${
           needsObj2Now
             ? 'border-orange-400 ring-2 ring-orange-400/40 shadow-[0_0_26px_rgba(251,146,60,0.20)]'
             : 'border-slate-800'
@@ -270,7 +276,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     />
                     <div className="min-w-0">
                       <div className="text-[13px] font-semibold leading-tight truncate">{mat.name}</div>
-                      <div className="text-[11px] text-slate-400 truncate font-mono mt-0.5">
+                      <div className="text-xs text-slate-400 truncate font-mono mt-0.5">
                         {mat.triboOrder > 0
                           ? `+${mat.triboOrder} Donor`
                           : mat.triboOrder < 0
@@ -727,49 +733,365 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     );
   }
 
+  // Module 4: Gold-Leaf Electroscope Instrument Telemetry, Grounding, Specimen & Overlays
+  if (moduleMode === 'module4') {
+    const guide = getElectroscopeGuideState(objects);
+    const scopeObj = objects.find((o) => o.shape === 'electroscope');
+    const leafAngle = scopeObj?.leafAngleDeg ?? 0;
+    const knobQ = scopeObj?.knobChargeNc ?? (scopeObj?.charge ?? 0) * 0.45;
+    const leafQ = scopeObj?.leafChargeNc ?? (scopeObj?.charge ?? 0) * 0.55;
+    const scopeNetQ = scopeObj?.charge ?? 0;
+    const isNonScopeSelected = selectedObject && selectedObject.shape !== 'electroscope';
+    const highlightStep4 = guidedElectroscopeMode && guide.step === 4;
+
+    const updateScope = (updates: Partial<ElectroObject>) => {
+      if (!scopeObj) return;
+      setObjects((prev) =>
+        prev.map((o) => (o.id === scopeObj.id ? { ...o, ...updates } : o))
+      );
+    };
+
+    const polarityText = (q: number) =>
+      q > 0.25 ? `+ (${q.toFixed(1)} nC)` : q < -0.25 ? `− (${q.toFixed(1)} nC)` : 'Neutral (0)';
+
+    return (
+      <div className="w-full lg:w-[272px] xl:w-[288px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 overflow-y-auto flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0">
+        {/* Header with Guide Toggle & Reset */}
+        <div className="flex items-center justify-between gap-1.5 border-b border-slate-800 pb-2 shrink-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Gauge className="w-4 h-4 text-amber-400 shrink-0" />
+            <h2 className="text-sm font-bold text-slate-100 truncate">Electroscope</h2>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onToggleGuidedElectroscope && (
+              <button
+                onClick={onToggleGuidedElectroscope}
+                className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors whitespace-nowrap ${
+                  guidedElectroscopeMode
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                    : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
+                }`}
+                title="Turn step-by-step guidance ON or OFF"
+              >
+                Guide: {guidedElectroscopeMode ? 'ON' : 'OFF'}
+              </button>
+            )}
+            <button
+              onClick={onResetScene}
+              className="px-2 py-1 text-xs font-semibold text-slate-200 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        {/* 1. Gold-Leaf Electroscope Live Instrument Panel */}
+        {scopeObj ? (
+          <div
+            className={`p-2.5 rounded-xl space-y-2 shadow-lg shrink-0 border transition-all ${
+              highlightStep4
+                ? 'bg-amber-950/20 border-amber-400 ring-2 ring-amber-400/25'
+                : 'bg-slate-950/90 border-amber-400/45'
+            }`}
+          >
+            {/* Leaf Divergence Gauge */}
+            <div className="space-y-1">
+              <div className="flex items-baseline justify-between font-mono tabular-nums">
+                <span className="text-[13px] font-semibold text-slate-200">Leaf Angle θ</span>
+                <span className="text-xl font-extrabold text-amber-300">
+                  {leafAngle.toFixed(1)}°
+                </span>
+              </div>
+              <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-yellow-300 transition-all duration-100"
+                  style={{ width: `${Math.min(100, (leafAngle / 68) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Knob / Leaf / Net Q Telemetry */}
+            <div className="grid grid-cols-1 gap-1 bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 text-xs font-mono tabular-nums">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Net Charge Q:</span>
+                <span className={scopeNetQ > 0.15 ? 'text-cyan-300 font-bold' : scopeNetQ < -0.15 ? 'text-pink-300 font-bold' : 'text-slate-200 font-bold'}>
+                  {scopeNetQ > 0.05 ? `+${scopeNetQ.toFixed(1)}` : scopeNetQ.toFixed(1)} nC
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Brass Knob:</span>
+                <span className={knobQ > 0.25 ? 'text-cyan-300 font-bold' : knobQ < -0.25 ? 'text-pink-300 font-bold' : 'text-slate-200'}>
+                  {polarityText(knobQ)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Gold Leaves:</span>
+                <span className={leafQ > 0.25 ? 'text-cyan-300 font-bold' : leafQ < -0.25 ? 'text-pink-300 font-bold' : 'text-slate-200'}>
+                  {polarityText(leafQ)}
+                </span>
+              </div>
+            </div>
+
+            {/* Ground / Finger Touch & Discharge Actions */}
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              <button
+                onClick={() => updateScope({ isGrounded: !scopeObj.isGrounded })}
+                className={`px-2 py-2 rounded-xl border font-bold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
+                  scopeObj.isGrounded
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm'
+                    : highlightStep4
+                    ? 'bg-emerald-950/75 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/35'
+                    : 'bg-slate-900 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50'
+                }`}
+                title="Touch brass knob with grounded finger (0 V) — unground before removing nearby charged rod to permanently charge by induction!"
+              >
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                <span>{scopeObj.isGrounded ? 'Grounded (0V)' : 'Ground Knob'}</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  updateScope({
+                    charge: 0,
+                    leafChargeNc: 0,
+                    knobChargeNc: 0,
+                    isGrounded: false,
+                  })
+                }
+                className="px-2 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/70 text-slate-100 font-semibold transition-colors whitespace-nowrap"
+              >
+                Discharge (0)
+              </button>
+            </div>
+
+            {/* Quick Pre-Charge Scope for Polarity Testing */}
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-slate-300">
+                Pre-Charge Scope
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-xs font-mono">
+                {[-12, 0, 12].map((qVal) => (
+                  <button
+                    key={qVal}
+                    onClick={() => updateScope({ charge: qVal, isGrounded: false })}
+                    className={`py-1 rounded-lg border font-bold transition-colors ${
+                      Math.abs(scopeNetQ - qVal) < 0.5 && !scopeObj.isGrounded
+                        ? 'bg-amber-950/70 border-amber-400 text-amber-300'
+                        : 'bg-slate-900 border-slate-800 hover:border-slate-600 text-slate-200'
+                    }`}
+                  >
+                    {qVal > 0 ? `+${qVal} nC` : `${qVal} nC`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* 2. Selected Bench Specimen Controls */}
+        {isNonScopeSelected && selectedObject && selectedMat ? (
+          <div className="bg-slate-950/85 border border-orange-400/55 p-2.5 rounded-xl space-y-2 shrink-0">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-3 h-3 rounded-sm shrink-0"
+                  style={{ backgroundColor: selectedMat.color }}
+                />
+                <span className="text-[13px] font-bold text-slate-100 truncate">{selectedObject.name}</span>
+              </div>
+              <span
+                className={`text-xs font-mono font-bold tabular-nums shrink-0 ${
+                  selectedObject.charge > 0.05
+                    ? 'text-cyan-400'
+                    : selectedObject.charge < -0.05
+                    ? 'text-pink-400'
+                    : 'text-slate-300'
+                }`}
+              >
+                {selectedObject.charge > 0.05 ? `+${selectedObject.charge.toFixed(1)}` : selectedObject.charge.toFixed(1)} nC
+              </span>
+            </div>
+
+            <button
+              onClick={() => onSingleRub(selectedObject.id)}
+              className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+              <span>Rub {selectedObject.name}</span>
+            </button>
+
+            <input
+              type="range"
+              min="-25"
+              max="25"
+              step="0.5"
+              value={selectedObject.charge}
+              onChange={(e) => handleUpdateSelectedObject({ charge: parseFloat(e.target.value) })}
+              className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            />
+
+            <div className="grid grid-cols-3 gap-1.5 text-xs">
+              <button
+                onClick={() => handleUpdateSelectedObject({ charge: 0 })}
+                className="py-1 bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-lg text-slate-200 font-semibold"
+              >
+                Zero (0)
+              </button>
+              <button
+                onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
+                className={`py-1 rounded-lg border font-semibold ${
+                  selectedObject.isPinned
+                    ? 'bg-amber-950/80 border-amber-400 text-amber-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-200'
+                }`}
+              >
+                {selectedObject.isPinned ? 'Pinned' : 'Pin'}
+              </button>
+              <button
+                onClick={() => handleUpdateSelectedObject({ rotation: (selectedObject.rotation + 45) % 360 })}
+                className="py-1 bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-lg text-slate-200 font-semibold"
+              >
+                +45°
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-950/50 border border-slate-800/80 p-2.5 rounded-xl text-center text-xs text-slate-300 shrink-0 leading-snug">
+            Add an object from the Left panel, rub it to charge, then bring it near or touch the brass knob.
+          </div>
+        )}
+
+        {/* 3. Visual Overlays */}
+        <div className="space-y-1.5 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 shrink-0">
+          <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+            <Eye className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Stage Overlays</span>
+          </span>
+
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <button
+              onClick={() => toggleOverlay('showCharges')}
+              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showCharges
+                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
+              }`}
+            >
+              <span>Charges</span>
+              <span className="font-mono font-bold">{overlayConfig.showCharges ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => toggleOverlay('showChargeMagnitude')}
+              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showChargeMagnitude
+                  ? 'bg-orange-950/60 border-orange-400/70 text-orange-200'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
+              }`}
+            >
+              <span>+/- nC &amp; θ</span>
+              <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => toggleOverlay('showFieldVectors')}
+              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showFieldVectors
+                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
+              }`}
+            >
+              <span>E-Vectors</span>
+              <span className="font-mono font-bold">{overlayConfig.showFieldVectors ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => toggleOverlay('showFieldLines')}
+              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showFieldLines
+                  ? 'bg-sky-950/60 border-sky-500/50 text-sky-200'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
+              }`}
+            >
+              <span>Field Lines</span>
+              <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => toggleOverlay('showFieldVectorGrid')}
+              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showFieldVectorGrid
+                  ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
+              }`}
+            >
+              <span>Vector Grid</span>
+              <span className="font-mono font-bold">{overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
+                toggleOverlay('showProbe');
+              }}
+              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                sensor.isActive && overlayConfig.showProbe
+                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
+              }`}
+            >
+              <span>Probe</span>
+              <span className="font-mono font-bold">{sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Module 2: Full Multi-Body & Advanced Electrostatic Data Controls
   return (
-    <div className="w-full lg:w-[272px] xl:w-72 h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-3.5 overflow-y-auto flex flex-col gap-3.5 text-slate-100 shadow-2xl shrink-0">
+    <div className="w-full lg:w-[272px] xl:w-[288px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-3 overflow-y-auto flex flex-col gap-3 text-slate-100 shadow-2xl shrink-0">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
         <div className="flex items-center gap-2">
           <Sliders className="w-4 h-4 text-cyan-400" />
-          <h2 className="text-sm font-bold text-slate-100">Physics & Advanced Data</h2>
+          <h2 className="text-sm font-bold text-slate-100">Physics &amp; Controls</h2>
         </div>
         <button
           onClick={onResetScene}
-          className="px-2.5 py-1 text-[11px] font-medium text-slate-400 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
+          className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
         >
           Reset Scene
         </button>
       </div>
 
       {/* Live Advanced Electrostatic Telemetry */}
-      <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-xl space-y-1.5 text-[11px] font-mono tabular-nums">
-        <div className="text-[10px] font-sans font-bold uppercase tracking-wider text-cyan-400 pb-1 border-b border-slate-800/80">
+      <div className="bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl space-y-1 text-xs font-mono tabular-nums">
+        <div className="text-[11px] font-sans font-bold uppercase tracking-wider text-cyan-400 pb-1 border-b border-slate-800/80">
           Advanced Electrostatic Telemetry
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Probe Potential V:</span>
+          <span className="text-slate-400">Probe Potential V:</span>
           <span className="text-emerald-400 font-bold">{probeData.voltageV} V</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Field Magnitude |E|:</span>
+          <span className="text-slate-400">Field Magnitude |E|:</span>
           <span className="text-pink-400 font-bold">{probeData.fieldMagnitude} N/C</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Components (Ex, Ey):</span>
+          <span className="text-slate-400">Components (Ex, Ey):</span>
           <span className="text-slate-200">{probeData.fieldEx}, {probeData.fieldEy} N/C</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">Peak Net Force:</span>
+          <span className="text-slate-400">Peak Net Force:</span>
           <span className="text-amber-400 font-bold">{peakForce.toFixed(2)} µN</span>
         </div>
       </div>
 
       {/* 1. Selected Object Inspector */}
       {selectedObject && selectedMat ? (
-        <div className="bg-slate-950/90 border border-orange-400/60 p-4 rounded-xl space-y-3.5 shadow-xl">
+        <div className="bg-slate-950/90 border border-orange-400/60 p-3 rounded-xl space-y-2.5 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
             <div className="flex items-center gap-2 min-w-0">
               <div
@@ -777,8 +1099,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 style={{ backgroundColor: selectedMat.color }}
               />
               <div className="min-w-0">
-                <span className="text-xs font-bold text-slate-100 block truncate">{selectedObject.name}</span>
-                <span className="text-[10px] text-slate-500 font-mono truncate block">{selectedMat.chemicalFormula}</span>
+                <span className="text-[13px] font-bold text-slate-100 block truncate">{selectedObject.name}</span>
+                <span className="text-[11px] text-slate-400 font-mono truncate block">{selectedMat.chemicalFormula}</span>
               </div>
             </div>
             <button
@@ -816,21 +1138,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               onChange={(e) => handleUpdateSelectedObject({ charge: parseFloat(e.target.value) })}
               className="w-full accent-cyan-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-              <span>-25 nC (Excess e⁻)</span>
-              <span>0 nC (Neutral)</span>
-              <span>+25 nC (Deficit e⁻)</span>
+            <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+              <span>-25 nC (e⁻)</span>
+              <span>0 nC</span>
+              <span>+25 nC</span>
             </div>
           </div>
 
           {/* Ground, Pin & Rotation Controls */}
-          <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+          <div className="grid grid-cols-3 gap-1.5 text-xs">
             <button
               onClick={() => handleUpdateSelectedObject({ isGrounded: !selectedObject.isGrounded })}
-              className={`px-2 py-2 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
+              className={`px-2 py-1.5 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
                 selectedObject.isGrounded
                   ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80'
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/80'
               }`}
             >
               <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -839,10 +1161,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             <button
               onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
-              className={`px-2 py-2 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
+              className={`px-2 py-1.5 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
                 selectedObject.isPinned
                   ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-sm'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800/80'
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/80'
               }`}
             >
               <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -853,7 +1175,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               onClick={() =>
                 handleUpdateSelectedObject({ rotation: (selectedObject.rotation + 45) % 360 })
               }
-              className="px-2 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800/80 text-slate-300 rounded-xl font-medium flex items-center gap-1 justify-center transition-colors whitespace-nowrap"
+              className="px-2 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800/80 text-slate-200 rounded-xl font-medium flex items-center gap-1 justify-center transition-colors whitespace-nowrap"
             >
               <RotateCw className="w-3.5 h-3.5 shrink-0" />
               <span>+45°</span>
@@ -861,27 +1183,27 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
 
           {/* Microscopic & Physical Material Properties */}
-          <div className="text-[11px] text-slate-300 leading-snug bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 space-y-1 font-mono tabular-nums">
+          <div className="text-xs text-slate-200 leading-snug bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 space-y-1 font-mono tabular-nums">
             <div className="flex justify-between">
-              <span className="text-slate-500">Work Function (W):</span>
+              <span className="text-slate-400">Work Function (W):</span>
               <span className="text-amber-400 font-bold">{selectedMat.workFunctionEv} eV</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Permittivity (εᵣ):</span>
+              <span className="text-slate-400">Permittivity (εᵣ):</span>
               <span className="text-pink-400 font-bold">{selectedMat.dielectricConstant}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Mass / Density:</span>
+              <span className="text-slate-400">Mass / Density:</span>
               <span className="text-slate-200 font-bold">
                 {selectedMat.massGrams} g · {selectedMat.densityGCm3} g/cm³
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Surface Friction (μₖ):</span>
+              <span className="text-slate-400">Surface Friction (μₖ):</span>
               <span className="text-emerald-400 font-bold">{selectedMat.frictionCoeff.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Triboelectric Affinity:</span>
+              <span className="text-slate-400">Tribo Affinity:</span>
               <span className={selectedMat.triboOrder >= 0 ? 'text-cyan-400 font-bold' : 'text-pink-400 font-bold'}>
                 {selectedMat.triboOrder >= 0 ? `+${selectedMat.triboOrder} Donor` : `${selectedMat.triboOrder} Acceptor`}
               </span>
@@ -897,12 +1219,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {/* 2. Charge Visualization & Dynamic Motion Mode */}
       <div className="space-y-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-        <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-cyan-400" />
             Charge View Mode
           </span>
-          <span className="text-[10px] text-cyan-400 font-mono">Microscopic</span>
+          <span className="text-[11px] text-cyan-400 font-mono">Microscopic</span>
         </span>
 
         {/* Segmented Charge View Buttons */}
@@ -911,36 +1233,36 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'all_charges' }))}
             className={`px-2.5 py-1.5 rounded-lg border text-left transition-all ${
               overlayConfig.chargeViewMode === 'all_charges'
-                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold shadow-sm'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
+                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
             }`}
           >
             <div className="truncate">All Charges</div>
-            <div className="text-[10px] text-slate-500 font-normal">Nuclei (+) & e⁻ (-)</div>
+            <div className="text-[11px] text-slate-400 font-normal">Nuclei (+) &amp; e⁻ (-)</div>
           </button>
 
           <button
             onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'excess_and_free' }))}
             className={`px-2.5 py-1.5 rounded-lg border text-left transition-all ${
               overlayConfig.chargeViewMode === 'excess_and_free'
-                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold shadow-sm'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
+                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
             }`}
           >
             <div className="truncate">Excess Charges</div>
-            <div className="text-[10px] text-slate-500 font-normal">Net static Q</div>
+            <div className="text-[11px] text-slate-400 font-normal">Net static Q</div>
           </button>
 
           <button
             onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'hidden' }))}
             className={`px-2.5 py-1.5 rounded-lg border text-left transition-all col-span-2 ${
               overlayConfig.chargeViewMode === 'hidden'
-                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300 font-bold shadow-sm'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
+                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
             }`}
           >
             <div className="truncate">Charges Hidden</div>
-            <div className="text-[10px] text-slate-500 font-normal">Show only macroscopic matter & fields</div>
+            <div className="text-[11px] text-slate-400 font-normal">Show only macroscopic matter &amp; fields</div>
           </button>
         </div>
 
@@ -1163,7 +1485,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             }
             className="w-full accent-emerald-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
           />
-          <div className="flex justify-between text-[10px] text-slate-500 font-mono mt-1">
+          <div className="flex justify-between text-[11px] text-slate-400 font-mono mt-1">
             <span>0.0 Vacuum</span>
             <span className="text-emerald-300">
               {overlayConfig.coulombDamping < 0.15
@@ -1180,9 +1502,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Relative Humidity Slider */}
         <div className="pt-2 border-t border-slate-800/70">
-          <div className="flex justify-between text-xs text-slate-300 mb-1 font-mono tabular-nums">
+          <div className="flex justify-between text-xs text-slate-200 mb-1 font-mono tabular-nums">
             <span className="flex items-center gap-1">
-              <Droplets className="w-3 h-3 text-blue-400" />
+              <Droplets className="w-3.5 h-3.5 text-blue-400" />
               Air Humidity (Leak)
             </span>
             <span className="text-cyan-400 font-bold">{overlayConfig.humidityPercent}%</span>
@@ -1200,17 +1522,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
 
         {/* Known SI Constants & Breakdown Constraint */}
-        <div className="text-[10px] text-slate-400 bg-slate-900/70 p-2.5 rounded-lg border border-slate-800/80 space-y-1 font-mono tabular-nums">
+        <div className="text-[11px] text-slate-300 bg-slate-900/70 p-2.5 rounded-lg border border-slate-800/80 space-y-1 font-mono tabular-nums">
           <div className="flex justify-between">
-            <span className="text-slate-500">Coulomb Constant kₑ:</span>
-            <span className="text-slate-200">8.99×10⁹ N·m²/C²</span>
+            <span className="text-slate-400">Coulomb Constant kₑ:</span>
+            <span className="text-slate-100">8.99×10⁹ N·m²/C²</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Air Viscosity η (20°C):</span>
-            <span className="text-slate-200">{(AIR_VISCOSITY_ETA * 1e5).toFixed(2)}×10⁻⁵ Pa·s</span>
+            <span className="text-slate-400">Air Viscosity η (20°C):</span>
+            <span className="text-slate-100">{(AIR_VISCOSITY_ETA * 1e5).toFixed(2)}×10⁻⁵ Pa·s</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Paschen Breakdown E_bd:</span>
+            <span className="text-slate-400">Paschen Breakdown E_bd:</span>
             <span className="text-amber-400 font-semibold">
               {(getAirBreakdownThreshold(overlayConfig.humidityPercent) / 1e6).toFixed(2)} MV/m
             </span>

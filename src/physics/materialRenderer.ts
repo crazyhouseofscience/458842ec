@@ -71,6 +71,9 @@ export function drawRealisticMaterialBody(
     case 'ground':
       drawEarthGroundBusbar(ctx, hw, hh, w, h, isSelected);
       break;
+    case 'electroscope':
+      drawGoldLeafElectroscope(ctx, obj, hw, hh, w, h, isSelected, clock);
+      break;
     default:
       drawDefaultSpecimen(ctx, hw, hh, w, h, isSelected);
       break;
@@ -1081,6 +1084,293 @@ function drawDefaultSpecimen(
   ctx.stroke();
 }
 
+function drawGoldLeafElectroscope(
+  ctx: CanvasRenderingContext2D,
+  obj: ElectroObject,
+  hw: number,
+  hh: number,
+  w: number,
+  h: number,
+  isSelected: boolean,
+  clock: number
+) {
+  const baseTop = hh - 22;
+  const baseH = 22;
+  const jarTop = -hh + 44;
+  const jarBot = baseTop;
+  const jarHalfW = hw - 10;
+  const knobY = -hh * 0.82;
+  const knobR = 17;
+  const stemTopY = knobY + knobR - 2;
+  const stopperY = jarTop;
+  const hingeY = hh * 0.02;
+  const leafLen = Math.min(54, jarBot - hingeY - 12);
+
+  // 1. Dark Bakelite Base Platform
+  const bakeliteGrad = ctx.createLinearGradient(-hw, baseTop, -hw, hh);
+  bakeliteGrad.addColorStop(0, '#334155');
+  bakeliteGrad.addColorStop(0.25, '#1e293b');
+  bakeliteGrad.addColorStop(1, '#090d16');
+  ctx.fillStyle = bakeliteGrad;
+  ctx.beginPath();
+  ctx.roundRect(-hw + 4, baseTop, w - 8, baseH, [4, 4, 8, 8]);
+  ctx.fill();
+
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+
+  ctx.strokeStyle = isSelected ? '#fb923c' : '#475569';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Brass pedestal collar atop base
+  const brassPlinth = ctx.createLinearGradient(-34, 0, 34, 0);
+  brassPlinth.addColorStop(0, '#92400e');
+  brassPlinth.addColorStop(0.35, '#fbbf24');
+  brassPlinth.addColorStop(0.6, '#fef08a');
+  brassPlinth.addColorStop(1, '#78350f');
+  ctx.fillStyle = brassPlinth;
+  ctx.fillRect(-34, baseTop - 6, 68, 7);
+
+  // 2. Glass Bell Jar Interior & Protractor Scale (0° - 60°)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-jarHalfW, jarBot);
+  ctx.lineTo(-jarHalfW, jarTop + 26);
+  ctx.quadraticCurveTo(-jarHalfW, jarTop, -22, jarTop);
+  ctx.lineTo(22, jarTop);
+  ctx.quadraticCurveTo(jarHalfW, jarTop, jarHalfW, jarTop + 26);
+  ctx.lineTo(jarHalfW, jarBot);
+  ctx.closePath();
+
+  const jarBg = ctx.createLinearGradient(-jarHalfW, 0, jarHalfW, 0);
+  jarBg.addColorStop(0, 'rgba(148, 163, 184, 0.16)');
+  jarBg.addColorStop(0.22, 'rgba(226, 232, 240, 0.05)');
+  jarBg.addColorStop(0.78, 'rgba(186, 230, 253, 0.06)');
+  jarBg.addColorStop(1, 'rgba(148, 163, 184, 0.18)');
+  ctx.fillStyle = jarBg;
+  ctx.fill();
+  ctx.clip();
+
+  // Engraved laboratory degree arc inside bell jar
+  const scaleR = leafLen + 11;
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.34)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, hingeY, scaleR, Math.PI * 0.12, Math.PI * 0.88);
+  ctx.stroke();
+
+  for (const deg of [-60, -45, -30, -15, 0, 15, 30, 45, 60]) {
+    const rad = Math.PI / 2 - (deg * Math.PI) / 180;
+    const isMajor = deg % 30 === 0;
+    const r0 = scaleR - (isMajor ? 6 : 3.5);
+    const r1 = scaleR + 2;
+    ctx.strokeStyle = isMajor ? 'rgba(226, 232, 240, 0.45)' : 'rgba(148, 163, 184, 0.28)';
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(rad) * r0, hingeY + Math.sin(rad) * r0);
+    ctx.lineTo(Math.cos(rad) * r1, hingeY + Math.sin(rad) * r1);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 3. Vertical Brass Stem & Insulating Rubber Stopper
+  const stemGrad = ctx.createLinearGradient(-5, 0, 5, 0);
+  stemGrad.addColorStop(0, '#92400e');
+  stemGrad.addColorStop(0.4, '#fde047');
+  stemGrad.addColorStop(0.7, '#eab308');
+  stemGrad.addColorStop(1, '#78350f');
+  ctx.fillStyle = stemGrad;
+  ctx.fillRect(-4, stemTopY, 8, hingeY - stemTopY + 4);
+
+  // Black ebonite/rubber insulating collar sealing neck of glass jar
+  ctx.fillStyle = '#0f172a';
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect(-22, stopperY - 8, 44, 15, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // Brass saddle bracket at leaf hinge
+  ctx.fillStyle = '#eab308';
+  ctx.beginPath();
+  ctx.roundRect(-9, hingeY - 5, 18, 9, 3);
+  ctx.fill();
+
+  // 4. Dual 24k Gold-Foil Leaves rotated by ±leafAngleDeg
+  const leafAngleDeg = Math.max(0, Math.min(72, obj.leafAngleDeg ?? 0));
+  const leafAngleRad = (leafAngleDeg * Math.PI) / 180;
+  const leafQ = obj.leafChargeNc ?? obj.charge * 0.55;
+  const absLeafQ = Math.abs(leafQ);
+  const shimmer = absLeafQ > 0.3 ? Math.sin(clock * 7) * 0.012 : 0;
+
+  for (const side of [-1, 1] as const) {
+    ctx.save();
+    ctx.translate(side * 2.5, hingeY);
+    ctx.rotate(side * (-leafAngleRad + shimmer));
+
+    const goldGrad = ctx.createLinearGradient(-4, 0, 4, leafLen);
+    goldGrad.addColorStop(0, '#fef08a');
+    goldGrad.addColorStop(0.35, '#facc15');
+    goldGrad.addColorStop(0.75, '#eab308');
+    goldGrad.addColorStop(1, '#ca8a04');
+
+    if (absLeafQ > 0.25) {
+      ctx.shadowColor = leafQ > 0 ? 'rgba(56, 189, 248, 0.72)' : 'rgba(236, 72, 153, 0.75)';
+      ctx.shadowBlur = Math.min(14, 4 + absLeafQ * 0.7);
+    }
+
+    ctx.fillStyle = goldGrad;
+    ctx.strokeStyle = '#fef9c3';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(-2.5, 0);
+    ctx.lineTo(2.5, 0);
+    ctx.lineTo(3.8, leafLen);
+    ctx.lineTo(-3.8, leafLen);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    // Charge polarity markers directly on the gold foil leaves
+    if (absLeafQ > 0.35) {
+      const markerCount = Math.min(3, Math.max(1, Math.round(absLeafQ / 4)));
+      const isPos = leafQ > 0;
+      for (let m = 0; m < markerCount; m++) {
+        const my = leafLen * (0.34 + m * 0.26);
+        ctx.fillStyle = isPos ? '#0284c7' : '#be185d';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.arc(0, my, 4.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isPos ? '+' : '−', 0, my + 0.3);
+      }
+    }
+    ctx.restore();
+  }
+
+  // 5. Glass Bell Jar Outer Rim & Specular Highlights (drawn over leaves for authentic enclosure)
+  ctx.strokeStyle = isSelected ? '#fb923c' : 'rgba(186, 230, 253, 0.58)';
+  ctx.lineWidth = isSelected ? 2 : 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-jarHalfW, jarBot);
+  ctx.lineTo(-jarHalfW, jarTop + 26);
+  ctx.quadraticCurveTo(-jarHalfW, jarTop, -22, jarTop);
+  ctx.moveTo(22, jarTop);
+  ctx.quadraticCurveTo(jarHalfW, jarTop, jarHalfW, jarTop + 26);
+  ctx.lineTo(jarHalfW, jarBot);
+  ctx.stroke();
+
+  // Curved glass specular highlight streak
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(-jarHalfW + 8, jarBot - 10);
+  ctx.lineTo(-jarHalfW + 8, jarTop + 30);
+  ctx.quadraticCurveTo(-jarHalfW + 8, jarTop + 10, -jarHalfW + 22, jarTop + 7);
+  ctx.stroke();
+
+  // 6. Top Spherical Brass Collector Knob + Induced/Net Charge Badges
+  const knobQ = obj.knobChargeNc ?? obj.charge * 0.45;
+  const absKnobQ = Math.abs(knobQ);
+
+  if (absKnobQ > 0.25) {
+    ctx.save();
+    ctx.shadowColor = knobQ > 0 ? '#38bdf8' : '#ec4899';
+    ctx.shadowBlur = Math.min(18, 6 + absKnobQ * 0.9);
+    ctx.beginPath();
+    ctx.arc(0, knobY, knobR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.1)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  const knobGrad = ctx.createRadialGradient(-5, knobY - 5, 2, 0, knobY, knobR);
+  knobGrad.addColorStop(0, '#fef9c3');
+  knobGrad.addColorStop(0.32, '#facc15');
+  knobGrad.addColorStop(0.75, '#ca8a04');
+  knobGrad.addColorStop(1, '#713f12');
+
+  ctx.fillStyle = knobGrad;
+  ctx.beginPath();
+  ctx.arc(0, knobY, knobR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = isSelected ? '#fb923c' : '#fde047';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  // Charge glyphs directly on the brass collector knob
+  if (absKnobQ > 0.35) {
+    const isPos = knobQ > 0;
+    const count = Math.min(5, Math.max(1, Math.round(absKnobQ / 2.8)));
+    for (let k = 0; k < count; k++) {
+      const a = -Math.PI * 0.85 + (count === 1 ? Math.PI * 0.35 : (k / (count - 1)) * Math.PI * 0.7);
+      const kx = Math.cos(a) * (knobR - 4);
+      const ky = knobY + Math.sin(a) * (knobR - 4);
+      ctx.fillStyle = isPos ? '#0284c7' : '#be185d';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.arc(kx, ky, 4.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isPos ? '+' : '−', kx, ky + 0.3);
+    }
+  }
+
+  // 7. Live Grounding Clamp / Finger Touch Indicator on Knob when isGrounded === true
+  if (obj.isGrounded) {
+    ctx.save();
+    ctx.strokeStyle = '#34d399';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(knobR + 2, knobY);
+    ctx.lineTo(knobR + 26, knobY);
+    ctx.lineTo(knobR + 26, knobY + 18);
+    // Earth ground symbol
+    ctx.moveTo(knobR + 15, knobY + 18);
+    ctx.lineTo(knobR + 37, knobY + 18);
+    ctx.moveTo(knobR + 19, knobY + 23);
+    ctx.lineTo(knobR + 33, knobY + 23);
+    ctx.moveTo(knobR + 23, knobY + 28);
+    ctx.lineTo(knobR + 29, knobY + 28);
+    ctx.stroke();
+
+    ctx.fillStyle = '#34d399';
+    ctx.beginPath();
+    ctx.arc(knobR + 2, knobY, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = 'bold 9.5px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('0 V', knobR + 16, knobY - 8);
+    ctx.restore();
+  }
+
+  // Subtle base plate label
+  ctx.fillStyle = 'rgba(226, 232, 240, 0.78)';
+  ctx.font = 'bold 9.5px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`θ = ${leafAngleDeg.toFixed(0)}°`, 0, baseTop + baseH / 2 + 0.5);
+}
+
 function drawPointChargeOrb(
   ctx: CanvasRenderingContext2D,
   hw: number,
@@ -1175,7 +1465,7 @@ export function drawSurfaceChargeShimmer(
   animate: boolean,
   rubAgitation = 0
 ) {
-  if (obj.shape === 'point_charge') return;
+  if (obj.shape === 'point_charge' || obj.shape === 'electroscope') return;
   const absCharge = Math.abs(obj.charge);
   const inducedConducting = isConductor && absCharge < 0.15 && externalField.magnitude > 45;
   const inducedDielectric = !isConductor && absCharge < 0.15 && externalField.magnitude > 75;

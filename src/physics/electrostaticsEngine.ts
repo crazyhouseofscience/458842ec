@@ -31,8 +31,24 @@ export function calculateElectricField(px: number, py: number, objects: ElectroO
     // If object has zero net charge and no surface charges, skip direct monopole contribution
     if (Math.abs(obj.charge) < 0.001 && obj.surfaceCharges.length === 0) continue;
 
-    // Use surface charges if available for higher spatial accuracy, or center of charge
-    if (obj.surfaceCharges.length > 0) {
+    if (obj.shape === 'electroscope') {
+      const { knobX, knobY, leavesX, leavesY } = getElectroscopeTerminals(obj);
+      const qKnob = (obj.knobChargeNc ?? obj.charge * 0.45) * NC_TO_COULOMBS;
+      const qLeaves = (obj.leafChargeNc ?? obj.charge * 0.55) * NC_TO_COULOMBS;
+      for (const [tx, ty, qCol] of [
+        [knobX, knobY, qKnob],
+        [leavesX, leavesY, qLeaves],
+      ] as Array<[number, number, number]>) {
+        if (Math.abs(qCol) < 1e-12) continue;
+        const dxMeter = (px - tx) / PIXELS_PER_METER;
+        const dyMeter = (py - ty) / PIXELS_PER_METER;
+        const r2 = dxMeter * dxMeter + dyMeter * dyMeter + 0.00025;
+        const r = Math.sqrt(r2);
+        const dE = (COULOMB_CONSTANT_KE * qCol) / r2;
+        Ex += dE * (dxMeter / r);
+        Ey += dE * (dyMeter / r);
+      }
+    } else if (obj.surfaceCharges.length > 0) {
       const qPerPoint = (obj.charge * NC_TO_COULOMBS) / obj.surfaceCharges.length;
       const cosRot = Math.cos((obj.rotation * Math.PI) / 180);
       const sinRot = Math.sin((obj.rotation * Math.PI) / 180);
@@ -212,7 +228,14 @@ export function processFrictionRubbing(
   acceptorId: string;
   count: number;
 } | null {
-  if (objA.shape === 'point_charge' || objB.shape === 'point_charge') return null;
+  if (
+    objA.shape === 'point_charge' ||
+    objB.shape === 'point_charge' ||
+    objA.shape === 'electroscope' ||
+    objB.shape === 'electroscope'
+  ) {
+    return null;
+  }
 
   // Check collision / overlap
   const dx = objA.x - objB.x;
@@ -343,7 +366,7 @@ export function rubSingleObjectWithLabCloth(
  * adding lattice positions, drift speeds, and organic distribution.
  */
 export function updateSurfaceChargeDots(obj: ElectroObject) {
-  if (obj.shape === 'point_charge') {
+  if (obj.shape === 'point_charge' || obj.shape === 'electroscope') {
     obj.surfaceCharges = [];
     return;
   }
@@ -394,7 +417,7 @@ export function updateSurfaceChargeDots(obj: ElectroObject) {
  */
 export function updateDielectricDipoles(objects: ElectroObject[]) {
   for (const obj of objects) {
-    if (obj.shape === 'point_charge') {
+    if (obj.shape === 'point_charge' || obj.shape === 'electroscope') {
       obj.dipoles = [];
       continue;
     }
@@ -548,7 +571,9 @@ export function processConductionAndGrounding(
     const objA = objects[i];
     if (objA.shape === 'point_charge') continue;
     const isGroundA = objA.isGrounded || objA.materialId === 'ground';
-    if (isGroundA && Math.abs(objA.charge) > 0.01) {
+    // Note: a grounded electroscope tracks Q_target = -C * V_ext(knob) in updateElectroscopePhysics
+    // so grounding near a charged rod enables permanent induction charging!
+    if (isGroundA && objA.shape !== 'electroscope' && Math.abs(objA.charge) > 0.01) {
       objA.charge *= Math.exp(-6.0 * stepDt);
       updateSurfaceChargeDots(objA);
     }
@@ -557,7 +582,32 @@ export function processConductionAndGrounding(
       const objB = objects[j];
       if (objB.shape === 'point_charge') continue;
       const isGroundB = objB.isGrounded || objB.materialId === 'ground';
-      const contact = computeContactGeometry(objA, objB);
+
+      const isScopeA = objA.shape === 'electroscope';
+      const isScopeB = objB.shape === 'electroscope';
+      let contact = computeContactGeometry(objA, objB);
+      let isElectroscopeKnobTouch = false;
+
+      if (isScopeA !== isScopeB) {
+        const scope = isScopeA ? objA : objB;
+        const other = isScopeA ? objB : objA;
+        const { knobX, knobY } = getElectroscopeTerminals(scope);
+        const otherPt = getBoundaryPointToward(other, knobX, knobY);
+        const knobDist = Math.hypot(otherPt.x - knobX, otherPt.y - knobY);
+        if (knobDist <= 30) {
+          isElectroscopeKnobTouch = true;
+          contact = {
+            touching: true,
+            signedGapPx: knobDist - 18,
+            interfaceX: (knobX + otherPt.x) / 2,
+            interfaceY: (knobY + otherPt.y) / 2,
+          };
+        } else {
+          // Only trigger conduction with an electroscope at its brass collector knob (glass bell jar insulates the sides)
+          contact.touching = false;
+        }
+      }
+
       if (!contact.touching) continue;
 
       const matA = MATERIALS_DATABASE[objA.materialId];
@@ -587,12 +637,10 @@ export function processConductionAndGrounding(
           const dq = Math.abs(objB.charge) * (1 - Math.exp(-rate * stepDt));
           if (dq > 0.0004) {
             if (objB.charge < 0) {
-              // B has excess e- -> drains B -> Ground
               objB.charge += dq;
               donor = objB;
               acceptor = objA;
             } else {
-              // B is positive -> e- flow Ground -> B to neutralize
               objB.charge -= dq;
               donor = objA;
               acceptor = objB;
@@ -626,7 +674,7 @@ export function processConductionAndGrounding(
         const cA = computeObjectCapacitanceF(objA);
         const cB = computeObjectCapacitanceF(objB);
         const qEqA = (objA.charge + objB.charge) * (cA / (cA + cB));
-        const qDiff = qEqA - objA.charge; // > 0 means A gains + (loses e- to B)
+        const qDiff = qEqA - objA.charge;
 
         if (absDeltaV > 10 && Math.abs(qDiff) > 0.03) {
           const rate = 3.4;
@@ -642,14 +690,14 @@ export function processConductionAndGrounding(
             updateSurfaceChargeDots(objB);
           }
         }
-      } else if (isCondA !== isCondB && absDeltaV > 28) {
-        // Charged insulator touching ungrounded conductor: localized surface-patch bleed driven by ΔV
+      } else if (isCondA !== isCondB && absDeltaV > 20) {
+        // Charged insulator touching conductor or electroscope knob: transfer static charge by conduction
         const cA = computeObjectCapacitanceF(objA);
         const cB = computeObjectCapacitanceF(objB);
         const qEqA = (objA.charge + objB.charge) * (cA / (cA + cB));
         const qDiff = qEqA - objA.charge;
         if (Math.abs(qDiff) > 0.05) {
-          const rate = 0.72;
+          const rate = isElectroscopeKnobTouch ? 2.1 : 0.72;
           const dqSigned = qDiff * (1 - Math.exp(-rate * stepDt));
           if (Math.abs(dqSigned) > 0.0003) {
             objA.charge += dqSigned;
@@ -657,14 +705,14 @@ export function processConductionAndGrounding(
             donor = dqSigned > 0 ? objA : objB;
             acceptor = dqSigned > 0 ? objB : objA;
             migratedNc = Math.abs(dqSigned);
-            mode = 'surface_bleed';
+            mode = isElectroscopeKnobTouch ? 'conduction' : 'surface_bleed';
             updateSurfaceChargeDots(objA);
             updateSurfaceChargeDots(objB);
           }
         }
-      } else if (absDeltaW >= 0.35 && Math.abs(objA.charge) < 2.2 && Math.abs(objB.charge) < 2.2) {
+      } else if (!isElectroscopeKnobTouch && absDeltaW >= 0.35 && Math.abs(objA.charge) < 2.2 && Math.abs(objB.charge) < 2.2) {
         // Contact electrification (Fermi-level equilibration ΔΦ = W_B - W_A) between dissimilar materials in contact
-        const qContactTarget = Math.min(2.4, absDeltaW * 1.05); // nC equilibrium from static contact
+        const qContactTarget = Math.min(2.4, absDeltaW * 1.05);
         const targetA = deltaW > 0 ? qContactTarget : -qContactTarget;
         const qDiff = targetA - objA.charge;
         if (Math.abs(qDiff) > 0.04) {
@@ -973,4 +1021,87 @@ export function processAirBreakdownArcs(
   }
   return arcs;
 }
+
+/**
+ * Returns world coordinates of the electroscope's top brass collector knob and internal gold leaves.
+ */
+export function getElectroscopeTerminals(scope: ElectroObject): {
+  knobX: number;
+  knobY: number;
+  leavesX: number;
+  leavesY: number;
+} {
+  const rotRad = (scope.rotation * Math.PI) / 180;
+  const cosR = Math.cos(rotRad);
+  const sinR = Math.sin(rotRad);
+  const knobLocalY = -scope.height * 0.41;
+  const leavesLocalY = scope.height * 0.08;
+  return {
+    knobX: scope.x - knobLocalY * sinR,
+    knobY: scope.y + knobLocalY * cosR,
+    leavesX: scope.x - leavesLocalY * sinR,
+    leavesY: scope.y + leavesLocalY * cosR,
+  };
+}
+
+/**
+ * Updates electrostatic induction, grounding-induction (0 V clamp), charge partitioning
+ * between the brass knob & gold leaves, and damped 2nd-order leaf divergence physics.
+ */
+export function updateElectroscopePhysics(objects: ElectroObject[], dt: number) {
+  const stepDt = Math.max(0.001, Math.min(0.05, dt));
+  const cScopeNcPerV = 0.011; // ~11 pF calibrated bench scale
+  const cPolarNcPerV = 0.015; // differential knob-vs-leaf polarization capacitance
+
+  for (const scope of objects) {
+    if (scope.shape !== 'electroscope') continue;
+    const others = objects.filter((o) => o.id !== scope.id);
+    const { knobX, knobY, leavesX, leavesY } = getElectroscopeTerminals(scope);
+
+    const vKnob = calculateElectricPotential(knobX, knobY, others);
+    const vLeaves = calculateElectricPotential(leavesX, leavesY, others);
+
+    if (scope.isGrounded) {
+      // Grounding holds the conductor at V = 0: Q_scope -> -C_scope * V_ext(knob)
+      // Leaves are connected to Earth (0 V) so leaf charge collapses while opposite charge collects on the knob!
+      const qTarget = Math.max(-scope.capacityNc, Math.min(scope.capacityNc, -cScopeNcPerV * vKnob));
+      scope.charge += (qTarget - scope.charge) * (1 - Math.exp(-8.5 * stepDt));
+      scope.leafChargeNc = (scope.leafChargeNc ?? 0) * Math.exp(-10 * stepDt);
+      scope.knobChargeNc = scope.charge;
+    } else {
+      // Isolated electroscope: potential gradient (V_knob - V_leaves) drives electrons between knob and leaves!
+      // Example: (-) rod near knob -> V_knob < V_leaves -> qIndLeaves < 0 (leaves become -, knob becomes +)
+      const qIndLeaves = cPolarNcPerV * (vKnob - vLeaves);
+      const rawLeafQ = 0.58 * scope.charge + qIndLeaves;
+      const rawKnobQ = 0.42 * scope.charge - qIndLeaves;
+      scope.leafChargeNc = rawLeafQ;
+      scope.knobChargeNc = rawKnobQ;
+    }
+
+    const absLeafQ = Math.abs(scope.leafChargeNc ?? 0);
+    // Electrostatic torque vs gravitational restoring torque: smooth saturation up to 68 degrees half-angle
+    const targetAngleDeg = absLeafQ < 0.12 ? 0 : Math.min(68, 68 * (absLeafQ / (absLeafQ + 5.2)));
+
+    const currentAngle = scope.leafAngleDeg ?? 0;
+    const currentVel = scope.leafAngularVel ?? 0;
+    const stiffness = 135;
+    const damping = 13.5;
+
+    const angularAcc = stiffness * (targetAngleDeg - currentAngle) - damping * currentVel;
+    let nextVel = currentVel + angularAcc * stepDt;
+    let nextAngle = currentAngle + nextVel * stepDt;
+
+    if (nextAngle < 0) {
+      nextAngle = 0;
+      nextVel = Math.max(0, -nextVel * 0.15);
+    } else if (nextAngle > 72) {
+      nextAngle = 72;
+      nextVel = Math.min(0, -nextVel * 0.2);
+    }
+
+    scope.leafAngleDeg = nextAngle;
+    scope.leafAngularVel = nextVel;
+  }
+}
+
 

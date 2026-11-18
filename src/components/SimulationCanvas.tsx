@@ -23,8 +23,11 @@ import {
   updateDielectricDipoles,
   stepDampedCoulombDynamics,
   processAirBreakdownArcs,
+  updateElectroscopePhysics,
+  getElectroscopeTerminals,
 } from '../physics/electrostaticsEngine';
 import { drawRealisticMaterialBody, drawSurfaceChargeShimmer } from '../physics/materialRenderer';
+import { getElectroscopeGuideState } from '../utils/electroscopeGuide';
 
 interface SimulationCanvasProps {
   moduleMode?: ModuleMode;
@@ -41,6 +44,8 @@ interface SimulationCanvasProps {
   singleRubEvent?: { objectId: string; timestamp: number } | null;
   isStageExpanded?: boolean;
   onToggleExpandStage?: () => void;
+  guidedElectroscopeMode?: boolean;
+  onToggleGuidedElectroscope?: () => void;
 }
 
 export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
@@ -58,17 +63,29 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   singleRubEvent,
   isStageExpanded = false,
   onToggleExpandStage,
+  guidedElectroscopeMode = true,
+  onToggleGuidedElectroscope,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Refs synced to latest props so the rAF loop runs smoothly at 60fps without teardown thrashing
+  const moduleModeRef = useRef<ModuleMode>(moduleMode);
+  const guidedElectroscopeModeRef = useRef<boolean>(guidedElectroscopeMode);
   const objectsRef = useRef<ElectroObject[]>(objects);
   const overlayConfigRef = useRef<VisualOverlayConfig>(overlayConfig);
   const sensorRef = useRef<ProbeSensor>(sensor);
   const selectedObjectIdRef = useRef<string | null>(selectedObjectId);
   const onProbeDataUpdateRef = useRef(onProbeDataUpdate);
   const onFrictionLogRef = useRef(onFrictionLog);
+  const manuallyMovedScopeIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    moduleModeRef.current = moduleMode;
+  }, [moduleMode]);
+  useEffect(() => {
+    guidedElectroscopeModeRef.current = guidedElectroscopeMode;
+  }, [guidedElectroscopeMode]);
 
   useEffect(() => {
     const prevById = new Map(objectsRef.current.map((o) => [o.id, o]));
@@ -154,6 +171,25 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       window.removeEventListener('resize', updateSize);
     };
   }, []);
+
+  // Keep the Gold-Leaf Electroscope cleanly centered in Module 4 until the user drags it manually
+  useEffect(() => {
+    if (moduleMode !== 'module4') return;
+    const scope = objects.find((o) => o.shape === 'electroscope');
+    if (!scope || manuallyMovedScopeIdsRef.current.has(scope.id) || draggingId.current === scope.id) return;
+
+    const targetX = Math.round(canvasDimensions.width / 2);
+    const targetY = Math.round(canvasDimensions.height / 2 - 4);
+    if (Math.abs(scope.x - targetX) > 2 || Math.abs(scope.y - targetY) > 2) {
+      setObjects((prev) =>
+        prev.map((o) =>
+          o.id === scope.id && !manuallyMovedScopeIdsRef.current.has(o.id)
+            ? { ...o, x: targetX, y: targetY, vx: 0, vy: 0 }
+            : o
+        )
+      );
+    }
+  }, [moduleMode, canvasDimensions.width, canvasDimensions.height, objects, setObjects]);
 
   // Handle programmatic friction trigger from the toolbar
   useEffect(() => {
@@ -322,6 +358,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     let lastArcCheckTime = 0;
     let lastChargeMap: Record<string, number> = {};
     let lastPosMap: Record<string, { x: number; y: number }> = {};
+    let lastLeafAngleMap: Record<string, number> = {};
 
     if (fieldStreamersRef.current.length === 0) {
       for (let i = 0; i < 60; i++) {
@@ -346,9 +383,10 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       globalClockRef.current += dt;
       const clock = globalClockRef.current;
 
-      // 1. Physics Engine Step: Conduction, Grounding, Contact Migration & Dipoles
+      // 1. Physics Engine Step: Conduction, Grounding, Contact Migration, Electroscope Induction & Dipoles
       const contactEvents = processConductionAndGrounding(currentObjects, dt, cfg.humidityPercent);
       activeContactsRef.current = contactEvents;
+      updateElectroscopePhysics(currentObjects, dt);
       updateDielectricDipoles(currentObjects);
 
       // 1B. Damped Newtonian Coulomb Dynamics (inertia, Stokes viscous air drag, surface friction)
@@ -378,29 +416,42 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         }
       }
 
-      // Periodically sync charge/position readouts to React UI when idle (never during active drag)
-      if (!draggingId.current && !isDraggingProbe.current && time - lastChargeSyncTime > 280) {
+      // Periodically sync charge/position/leaf-angle readouts to React UI
+      if (!isDraggingProbe.current && time - lastChargeSyncTime > 220) {
         lastChargeSyncTime = time;
         let changed = false;
         for (const o of currentObjects) {
           const prevQ = lastChargeMap[o.id];
           const prevP = lastPosMap[o.id];
+          const prevA = lastLeafAngleMap[o.id];
+          const angleNow = o.leafAngleDeg ?? 0;
           if (
             prevQ === undefined ||
             Math.abs(o.charge - prevQ) > 0.08 ||
             !prevP ||
-            Math.hypot(o.x - prevP.x, o.y - prevP.y) > 6
+            Math.hypot(o.x - prevP.x, o.y - prevP.y) > 6 ||
+            prevA === undefined ||
+            Math.abs(angleNow - prevA) > 0.8
           ) {
             changed = true;
             lastChargeMap[o.id] = o.charge;
             lastPosMap[o.id] = { x: o.x, y: o.y };
+            lastLeafAngleMap[o.id] = angleNow;
           }
         }
         if (changed) {
           setObjects((prev) =>
             prev.map((o) => {
               const live = objectsRef.current.find((r) => r.id === o.id);
-              return live ? { ...live, surfaceCharges: [...live.surfaceCharges], dipoles: [...live.dipoles] } : o;
+              if (!live) return o;
+              if (draggingId.current === o.id) {
+                return {
+                  ...live,
+                  surfaceCharges: [...live.surfaceCharges],
+                  dipoles: [...live.dipoles],
+                };
+              }
+              return { ...live, surfaceCharges: [...live.surfaceCharges], dipoles: [...live.dipoles] };
             })
           );
         }
@@ -1049,7 +1100,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         }
 
         // 12. Draw Surface Charges (+ and - Glowing Particles) & Electrostatic Induction inside finite object frame
-        if (obj.shape !== 'point_charge' && cfg.showCharges && cfg.chargeViewMode !== 'hidden') {
+        if (obj.shape !== 'point_charge' && obj.shape !== 'electroscope' && cfg.showCharges && cfg.chargeViewMode !== 'hidden') {
           // Local external E-field vector for induced electron displacement (F = -e * E)
           const rotRad = (obj.rotation * Math.PI) / 180;
           const extLocalX = externalField.Ex * Math.cos(-rotRad) - externalField.Ey * Math.sin(-rotRad);
@@ -1306,9 +1357,20 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
         // Charge Magnitude numerical indicator (+/- nC) + Induced Polarization status above each object when toggled ON
         if (cfg.showChargeMagnitude) {
-          const isInducedNeutral = obj.shape !== 'point_charge' && Math.abs(obj.charge) <= 0.15 && externalField.magnitude > 55;
+          const isScopeInduced = obj.shape === 'electroscope' && Math.abs(obj.charge) <= 0.15 && (obj.leafAngleDeg ?? 0) > 2;
+          const isInducedNeutral =
+            isScopeInduced ||
+            (obj.shape !== 'point_charge' && obj.shape !== 'electroscope' && Math.abs(obj.charge) <= 0.15 && externalField.magnitude > 55);
           const chargeStr =
-            obj.charge > 0.05
+            obj.shape === 'electroscope'
+              ? obj.charge > 0.05
+                ? `+${obj.charge.toFixed(1)} nC · θ=${(obj.leafAngleDeg ?? 0).toFixed(0)}°`
+                : obj.charge < -0.05
+                ? `${obj.charge.toFixed(1)} nC · θ=${(obj.leafAngleDeg ?? 0).toFixed(0)}°`
+                : isScopeInduced
+                ? `0.0 nC · Induced ± (θ=${(obj.leafAngleDeg ?? 0).toFixed(0)}°)`
+                : '0.0 nC · θ=0°'
+              : obj.charge > 0.05
               ? `+${obj.charge.toFixed(1)} nC`
               : obj.charge < -0.05
               ? `${obj.charge.toFixed(1)} nC`
@@ -1377,6 +1439,46 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         }
 
         ctx.restore();
+      }
+
+      // 13A. Guided Mode Step 3 Highlight Ring around Electroscope Brass Knob
+      if (moduleModeRef.current === 'module4' && guidedElectroscopeModeRef.current) {
+        const guide = getElectroscopeGuideState(currentObjects);
+        if (guide.step === 3) {
+          const scope = currentObjects.find((o) => o.shape === 'electroscope');
+          if (scope) {
+            const { knobX, knobY } = getElectroscopeTerminals(scope);
+            const pulseR = 29 + Math.sin(clock * 4.5) * 4;
+
+            ctx.save();
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2.2;
+            ctx.setLineDash([6, 5]);
+            ctx.lineDashOffset = -clock * 20;
+            ctx.beginPath();
+            ctx.arc(knobX, knobY, pulseR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const callout = 'Bring charged object near knob';
+            ctx.font = 'bold 12px Plus Jakarta Sans, sans-serif';
+            const cw = ctx.measureText(callout).width + 18;
+            const cy = Math.max(24, knobY - 52);
+            ctx.fillStyle = 'rgba(69, 26, 3, 0.92)';
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.roundRect(knobX - cw / 2, cy - 13, cw, 26, 7);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#fde68a';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(callout, knobX, cy);
+            ctx.restore();
+          }
+        }
       }
 
       // 13B. Draw Paschen Air-Breakdown Corona Discharge Plasma Arcs
@@ -1782,29 +1884,29 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         ctx.lineTo(0, 16);
         ctx.stroke();
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
         ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.roundRect(14, -36, 155, 72, 8);
+        ctx.roundRect(14, -40, 178, 80, 8);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 10px Plus Jakarta Sans';
+        ctx.font = 'bold 11px Plus Jakarta Sans';
         ctx.textAlign = 'left';
-        ctx.fillText('FIELD & POTENTIAL PROBE', 22, -22);
+        ctx.fillText('FIELD & POTENTIAL PROBE', 22, -24);
 
         ctx.fillStyle = '#38bdf8';
-        ctx.font = 'bold 11px JetBrains Mono';
+        ctx.font = 'bold 12.5px JetBrains Mono';
         ctx.fillText(`V = ${readout.voltageV} V`, 22, -6);
 
         ctx.fillStyle = '#ec4899';
-        ctx.fillText(`|E| = ${readout.fieldMagnitude} N/C`, 22, 10);
+        ctx.fillText(`|E| = ${readout.fieldMagnitude} N/C`, 22, 12);
 
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '9px JetBrains Mono';
-        ctx.fillText(`Ex: ${readout.fieldEx} | Ey: ${readout.fieldEy}`, 22, 24);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '10.5px JetBrains Mono';
+        ctx.fillText(`Ex: ${readout.fieldEx} | Ey: ${readout.fieldEy}`, 22, 28);
 
         ctx.restore();
       }
@@ -1922,6 +2024,9 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       refDragged.y = ny;
       refDragged.vx = 0;
       refDragged.vy = 0;
+      if (refDragged.shape === 'electroscope') {
+        manuallyMovedScopeIdsRef.current.add(refDragged.id);
+      }
 
       // Evaluate triboelectric rubbing directly against live physics refs (zero React re-render storm)
       let chargeTransferred = false;
@@ -2105,12 +2210,14 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       })()}
 
       {/* Compact Stage Header Pill + Expand Stage Toggle */}
-      <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-2 bg-slate-900/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-xs text-slate-200 shadow-md">
+      <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-2 bg-slate-900/88 backdrop-blur-md px-3 py-1 rounded-lg border border-slate-800 text-xs lg:text-[13px] text-slate-200 shadow-md">
         <span className="font-semibold text-cyan-400">
           {moduleMode === 'module1'
             ? 'Two-Object Stage'
             : moduleMode === 'module3'
             ? 'Point Charges Stage'
+            : moduleMode === 'module4'
+            ? 'Gold-Leaf Electroscope'
             : 'Multi-Object Stage'}
         </span>
         {moduleMode === 'module3' && objects.length === 1 && (
@@ -2121,7 +2228,15 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             </span>
           </>
         )}
-        {objects.length >= 2 && (
+        {moduleMode === 'module4' && !guidedElectroscopeMode && (
+          <>
+            <span className="text-slate-600 hidden sm:inline">·</span>
+            <span className="hidden sm:inline text-slate-300">
+              Free Explore · Rub objects, approach knob to induce, or touch knob to charge
+            </span>
+          </>
+        )}
+        {moduleMode !== 'module4' && objects.length >= 2 && (
           <>
             <span className="text-slate-600 hidden sm:inline">·</span>
             <span className="hidden sm:inline text-slate-300">
@@ -2134,6 +2249,51 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           </>
         )}
       </div>
+
+      {/* Module 4 Step-by-Step Student Guide Banner (Bottom-Center, Never Covers Centered Electroscope) */}
+      {moduleMode === 'module4' && guidedElectroscopeMode && (() => {
+        const guide = getElectroscopeGuideState(objects);
+        return (
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 w-[min(94%,620px)] bg-slate-900/92 backdrop-blur-md border border-amber-400/70 rounded-xl px-3.5 py-2 shadow-xl flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-0.5">
+                <div className="flex items-center gap-1 shrink-0">
+                  {[1, 2, 3, 4].map((s) => (
+                    <span
+                      key={s}
+                      className={`w-5 h-5 rounded-full text-[11px] font-mono font-bold flex items-center justify-center ${
+                        s === guide.step
+                          ? 'bg-amber-400 text-slate-950'
+                          : s < guide.step
+                          ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-300 truncate">
+                  {guide.shortTitle}
+                </span>
+              </div>
+              <p className="text-[13px] text-slate-100 leading-snug">
+                {guide.instruction}
+              </p>
+            </div>
+
+            {onToggleGuidedElectroscope && (
+              <button
+                onClick={onToggleGuidedElectroscope}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 whitespace-nowrap shrink-0 transition-colors"
+                title="Turn off step-by-step guidance"
+              >
+                Turn Off Guide
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {onToggleExpandStage && (
         <button
@@ -2160,16 +2320,16 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       )}
 
       {/* Compact Charge Animation Legend in Bottom-Left Corner */}
-      <div className="absolute bottom-2.5 left-2.5 z-10 flex items-center gap-2.5 bg-slate-900/85 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] text-slate-300 shadow-md font-mono">
+      <div className="absolute bottom-2 left-2.5 z-10 flex items-center gap-2.5 bg-slate-900/88 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-xs text-slate-200 shadow-md font-mono">
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#38bdf8]" />
+          <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_5px_#38bdf8]" />
           <span className="text-cyan-300 font-semibold">
             {moduleMode === 'module3' ? 'Positive (+Q)' : 'Nuclei (+)'}
           </span>
         </div>
         <span className="text-slate-600">·</span>
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_5px_#ec4899]" />
+          <div className="w-2.5 h-2.5 rounded-full bg-pink-500 shadow-[0_0_5px_#ec4899]" />
           <span className="text-pink-300 font-semibold">
             {moduleMode === 'module3' ? 'Negative (−Q)' : 'Electrons (e⁻)'}
           </span>
@@ -2183,7 +2343,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       </div>
 
       {overlayConfig.showFieldVectorGrid && (
-        <div className="absolute bottom-2.5 right-2.5 z-10 flex items-center gap-2 bg-slate-900/88 backdrop-blur-md px-2.5 py-1 rounded-lg border border-cyan-500/40 text-[11px] text-cyan-200 shadow-md font-mono">
+        <div className="absolute bottom-2 right-2.5 z-10 flex items-center gap-2 bg-slate-900/88 backdrop-blur-md px-2.5 py-1 rounded-lg border border-cyan-500/40 text-xs text-cyan-200 shadow-md font-mono">
           <span>Grid: 60 px</span>
           <span className="text-slate-600">·</span>
           <span>|E| in N/C</span>

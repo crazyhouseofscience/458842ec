@@ -1,8 +1,8 @@
-export type ModuleMode = 'module1' | 'module2' | 'module3';
+export type ModuleMode = 'module1' | 'module2' | 'module3' | 'module4';
 
 export type MaterialCategory = 'tribo_positive' | 'tribo_neutral' | 'tribo_negative' | 'conductor' | 'dielectric';
 
-export type ObjectShape = 'rod' | 'balloon' | 'sphere' | 'paper_strip' | 'cloth_pad' | 'ground_plate' | 'point_charge';
+export type ObjectShape = 'rod' | 'balloon' | 'sphere' | 'paper_strip' | 'cloth_pad' | 'ground_plate' | 'point_charge' | 'electroscope';
 
 export interface MaterialDef {
   id: string;
@@ -122,6 +122,10 @@ export interface ElectroObject {
   dipoles: AtomicDipole[];
   colorOverride?: string;
   isDragging?: boolean;
+  leafAngleDeg?: number; // Electroscope gold-leaf half-angle divergence (0 to 68 deg)
+  leafAngularVel?: number;
+  leafChargeNc?: number; // Effective charge sitting on gold leaves
+  knobChargeNc?: number; // Effective charge sitting on top brass collector knob
 }
 
 export interface ProbeSensor {

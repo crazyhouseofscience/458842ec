@@ -255,6 +255,23 @@ export const MATERIALS_DATABASE: Record<string, MaterialDef> = {
     chemicalFormula: 'Earth Ground (Infinite Sink / Source)',
     electronAffinityText: 'Acts as an infinite sink or source of electrons. Maintains V = 0 Volts potential.',
     description: 'Ideal electrical ground. Instantly neutralizes excess static charge or provides electrons during electrostatic induction.'
+  },
+  electroscope: {
+    id: 'electroscope',
+    name: 'Gold-Leaf Electroscope',
+    category: 'conductor',
+    workFunctionEv: 5.10, // Gold (Au) / Brass collector work function
+    triboOrder: 0,
+    dielectricConstant: 1.0,
+    conductivity: 1.0,
+    densityGCm3: 8.50,
+    massGrams: 420.0,
+    frictionCoeff: 0.40,
+    color: '#eab308', // 24k gold & brass
+    borderColor: '#ca8a04',
+    chemicalFormula: 'Brass (CuZn) + 24k Gold Foil (Au)',
+    electronAffinityText: 'Isolated conductor assembly (Brass knob, stem & dual gold foil leaves). Approaches induce opposing knob/leaf poles; direct touch transfers charge by conduction.',
+    description: 'Classic laboratory gold-leaf electroscope inside a glass bell jar with protractor scale. Detects static charge magnitude and polarity via electrostatic induction or conduction.'
   }
 };
 

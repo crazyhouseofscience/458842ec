@@ -19,8 +19,9 @@ import { QuizPanel } from './components/QuizPanel';
 import { MaterialChemistryModal } from './components/MaterialChemistryModal';
 import { AIAssistantModal } from './components/AIAssistantModal';
 import { StartupScreen } from './components/StartupScreen';
+import { getElectroscopeGuideState } from './utils/electroscopeGuide';
 
-import { Zap, Sparkles, Plus, Minus, Play, Pause, RotateCcw, Grid3x3 } from 'lucide-react';
+import { Zap, Sparkles, Plus, Minus, Play, Pause, RotateCcw, Grid3x3, Shield, Compass } from 'lucide-react';
 
 function clonePreset(obj: ElectroObject): ElectroObject {
   return {
@@ -52,10 +53,14 @@ function getShapeAndDimsForMaterial(materialId: string): {
       ? 'sphere'
       : materialId === 'ground'
       ? 'ground_plate'
+      : materialId === 'electroscope'
+      ? 'electroscope'
       : 'cloth_pad';
 
   const dims =
-    materialId === 'plastic_ruler'
+    materialId === 'electroscope'
+      ? { width: 150, height: 220 }
+      : materialId === 'plastic_ruler'
       ? { width: 205, height: 34 }
       : materialId === 'aluminum_can'
       ? { width: 68, height: 108 }
@@ -116,6 +121,64 @@ function createPointChargeObject(
   };
 }
 
+function createElectroscopeObject(x = 530, y = 265, chargeNc = 0): ElectroObject {
+  return {
+    id: `scope-${Date.now()}`,
+    name: 'Gold-Leaf Electroscope',
+    materialId: 'electroscope',
+    shape: 'electroscope',
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    width: 150,
+    height: 220,
+    rotation: 0,
+    isPinned: true,
+    isGrounded: false,
+    charge: chargeNc,
+    capacityNc: 30,
+    surfaceCharges: [],
+    dipoles: [],
+    leafAngleDeg: 0,
+    leafAngularVel: 0,
+    leafChargeNc: chargeNc * 0.58,
+    knobChargeNc: chargeNc * 0.42,
+  };
+}
+
+function createSpecimenObject(
+  materialId: string,
+  x: number,
+  y: number,
+  chargeNc = 0,
+  isPinned = false
+): ElectroObject {
+  const mat = MATERIALS_DATABASE[materialId];
+  const { shape, width, height } = getShapeAndDimsForMaterial(materialId);
+  const obj: ElectroObject = {
+    id: `obj-${materialId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: mat?.name ?? materialId,
+    materialId,
+    shape,
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    width,
+    height,
+    rotation: 0,
+    isPinned,
+    isGrounded: materialId === 'ground',
+    charge: chargeNc,
+    capacityNc: 30,
+    surfaceCharges: [],
+    dipoles: [],
+  };
+  updateSurfaceChargeDots(obj);
+  return obj;
+}
+
 export default function App() {
   const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
     try {
@@ -132,6 +195,7 @@ export default function App() {
   const [objects, setObjects] = useState<ElectroObject[]>([]);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [isStageExpanded, setIsStageExpanded] = useState(false);
+  const [guidedElectroscopeMode, setGuidedElectroscopeMode] = useState<boolean>(true);
 
   const [overlayConfig, setOverlayConfig] = useState<VisualOverlayConfig>({
     showFieldVectors: false,
@@ -336,9 +400,29 @@ export default function App() {
       setFrictionLog(
         'Module 3 (Point Charges): Blank stage ready. Add 1 or more charges to inspect field lines & vectors; toggle Animate & Move when ready.'
       );
+    } else if (nextMode === 'module4') {
+      const scope = createElectroscopeObject(380, 260, 0);
+      setObjects([scope]);
+      setSelectedObjectId(null);
+      setOverlayConfig((prev) => ({
+        ...prev,
+        showFieldVectors: false,
+        showFieldLines: false,
+        showEquipotentials: false,
+        showForceVectors: false,
+        showProbe: false,
+        showCharges: true,
+        showChargeMagnitude: true,
+        showHaloGlow: true,
+        liveCoulombMotion: false,
+        chargeViewMode: 'all_charges',
+      }));
+      setFrictionLog(
+        'Module 4 (Electroscope Lab): Step 1 — Pick a classroom object from the Left panel to begin.'
+      );
     } else {
       setObjects((prev) => {
-        const cleaned = prev.filter((o) => o.shape !== 'point_charge');
+        const cleaned = prev.filter((o) => o.shape !== 'point_charge' && o.shape !== 'electroscope');
         if (cleaned.length !== prev.length) {
           setSelectedObjectId(cleaned[0]?.id ?? null);
         }
@@ -510,9 +594,24 @@ export default function App() {
     const mat = MATERIALS_DATABASE[materialId];
     if (!mat) return;
 
-    const count = objects.length;
-    const defaultX = 220 + (count % 4) * 160;
-    const defaultY = 220 + Math.floor(count / 4) * 120;
+    let defaultX = 220 + (objects.length % 4) * 160;
+    let defaultY = 220 + Math.floor(objects.length / 4) * 120;
+
+    if (moduleMode === 'module4') {
+      // Place test specimens cleanly beside the centered electroscope so they never overlap it
+      const testCount = objects.filter((o) => o.shape !== 'electroscope' && o.shape !== 'point_charge').length;
+      const slots: Array<[number, number]> = [
+        [155, 165],
+        [155, 325],
+        [615, 165],
+        [615, 325],
+        [155, 245],
+        [615, 245],
+      ];
+      const slot = slots[testCount % slots.length];
+      defaultX = slot[0];
+      defaultY = slot[1];
+    }
 
     const { shape, width, height } = getShapeAndDimsForMaterial(materialId);
 
@@ -539,7 +638,13 @@ export default function App() {
     updateSurfaceChargeDots(newObj);
     setObjects((prev) => [...prev, newObj]);
     setSelectedObjectId(newObj.id);
-    setFrictionLog(`Added ${mat.name} (${mat.massGrams} g, ρ=${mat.densityGCm3} g/cm³). Work Function W = ${mat.workFunctionEv} eV.`);
+    if (moduleMode === 'module4') {
+      setFrictionLog(
+        `Added ${mat.name}. Next: click "Rub" to charge it, then drag it near the brass knob!`
+      );
+    } else {
+      setFrictionLog(`Added ${mat.name} (${mat.massGrams} g, ρ=${mat.densityGCm3} g/cm³). Work Function W = ${mat.workFunctionEv} eV.`);
+    }
   };
 
   const handleRemoveObject = (id: string) => {
@@ -833,6 +938,33 @@ export default function App() {
       setFrictionLog(
         'Practical App — Xerographic Toner Transfer: Negatively charged polymer toner beads drift across the air gap toward the +19 nC imaging drum.'
       );
+    } else if (scenarioKey === 'scope_ruler_wool') {
+      const scope = createElectroscopeObject(530, 265, 0);
+      const ruler = createSpecimenObject('plastic_ruler', 220, 190, 0, false);
+      const wool = createSpecimenObject('wool', 220, 325, 0, false);
+      setObjects([scope, ruler, wool]);
+      setSelectedObjectId(ruler.id);
+      setFrictionLog('Loaded Ruler + Wool Lab: Rub them together to charge the ruler (−), then approach or touch the brass knob!');
+    } else if (scenarioKey === 'scope_glass_silk') {
+      const scope = createElectroscopeObject(530, 265, 0);
+      const glass = createSpecimenObject('glass', 220, 190, 0, false);
+      const silk = createSpecimenObject('silk', 220, 325, 0, false);
+      setObjects([scope, glass, silk]);
+      setSelectedObjectId(glass.id);
+      setFrictionLog('Loaded Glass + Silk Lab: Rub them together to charge the Glass Rod (+), then test induction & conduction!');
+    } else if (scenarioKey === 'scope_induction_demo') {
+      const scope = createElectroscopeObject(530, 265, 0);
+      const balloon = createSpecimenObject('teflon', 340, 145, -16.0, false);
+      setObjects([scope, balloon]);
+      setSelectedObjectId(balloon.id);
+      setFrictionLog('Induction Lab: Leaves diverge while (−) balloon is near knob! Click "Ground Knob", unground, then drag balloon away to trap permanent (+) charge!');
+    } else if (scenarioKey === 'scope_charged_test') {
+      const scope = createElectroscopeObject(530, 265, -12.0);
+      const ruler = createSpecimenObject('plastic_ruler', 210, 175, -12.0, false);
+      const glass = createSpecimenObject('glass', 210, 315, 12.0, false);
+      setObjects([scope, ruler, glass]);
+      setSelectedObjectId(ruler.id);
+      setFrictionLog('Polarity Test: Scope is (−12 nC). Bring (−) Ruler near knob to spread leaves wider, or (+) Glass Rod to drop them!');
     }
   };
 
@@ -884,6 +1016,11 @@ export default function App() {
       setSelectedObjectId(null);
       setOverlayConfig((prev) => ({ ...prev, liveCoulombMotion: false }));
       setFrictionLog('Point Charges stage cleared. Add a + or − charge to inspect field lines and vectors.');
+    } else if (moduleMode === 'module4') {
+      const scope = createElectroscopeObject(380, 260, 0);
+      setObjects([scope]);
+      setSelectedObjectId(null);
+      setFrictionLog('Electroscope bench reset. Step 1: Pick a classroom object from the Left panel.');
     } else {
       setObjects([]);
       setSelectedObjectId(null);
@@ -952,59 +1089,69 @@ export default function App() {
 
       {/* Workspace Module Switcher & Status Banner */}
       <div className="px-3 lg:px-4 py-1 bg-slate-900/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[13px] shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           {/* Segmented Module Switcher */}
           <div className="flex items-center gap-1 p-0.5 bg-slate-950 rounded-lg border border-slate-800 shrink-0">
             <button
               onClick={() => handleSwitchModule('module1')}
-              className={`px-2.5 py-0.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
                 moduleMode === 'module1'
                   ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-sm'
-                  : 'text-slate-300 hover:text-slate-100'
+                  : 'text-slate-200 hover:text-white'
               }`}
             >
               Module 1: Two Objects
             </button>
             <button
               onClick={() => handleSwitchModule('module2')}
-              className={`px-2.5 py-0.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
                 moduleMode === 'module2'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'text-slate-300 hover:text-slate-100'
+                  : 'text-slate-200 hover:text-white'
               }`}
             >
               Module 2: Multi-Object
             </button>
             <button
               onClick={() => handleSwitchModule('module3')}
-              className={`px-2.5 py-0.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
                 moduleMode === 'module3'
                   ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-sm'
-                  : 'text-slate-300 hover:text-slate-100'
+                  : 'text-slate-200 hover:text-white'
               }`}
             >
               Module 3: Point Charges
             </button>
+            <button
+              onClick={() => handleSwitchModule('module4')}
+              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
+                moduleMode === 'module4'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'text-slate-200 hover:text-white'
+              }`}
+            >
+              Module 4: Electroscope
+            </button>
           </div>
 
-          <span className="text-slate-600 hidden md:inline">·</span>
+          <span className="text-slate-600 hidden xl:inline">·</span>
 
           {frictionLog && (
-            <span className="text-slate-200 font-medium truncate max-w-xl hidden md:inline text-xs">
+            <span className="text-slate-200 font-medium truncate max-w-lg hidden xl:inline text-[13px]">
               {frictionLog}
             </span>
           )}
         </div>
 
         {moduleMode === 'module1' ? (
-          <div className="hidden sm:flex items-center gap-3 font-mono text-xs text-slate-300 tabular-nums">
+          <div className="hidden sm:flex items-center gap-3 font-mono text-xs lg:text-[13px] text-slate-200 tabular-nums">
             <span className="flex items-center gap-1.5 text-orange-300 font-semibold">
               <Zap className="w-3.5 h-3.5" />
               <span>2-Body Explorer</span>
             </span>
           </div>
         ) : moduleMode === 'module3' ? (
-          <div className="hidden sm:flex items-center gap-4 font-mono text-xs text-slate-300 tabular-nums">
+          <div className="hidden sm:flex items-center gap-4 font-mono text-xs lg:text-[13px] text-slate-200 tabular-nums">
             <div>Charges: <span className="text-pink-400 font-bold">{objects.length}</span></div>
             <div>
               ΣQ:{' '}
@@ -1019,8 +1166,20 @@ export default function App() {
               <div>|E|: <span className="text-emerald-400 font-bold">{probeData.fieldMagnitude} N/C</span></div>
             )}
           </div>
+        ) : moduleMode === 'module4' ? (
+          <div className="hidden sm:flex items-center gap-3 font-mono text-xs lg:text-[13px] text-slate-200 tabular-nums">
+            {(() => {
+              const scope = objects.find((o) => o.shape === 'electroscope');
+              return (
+                <>
+                  <div>Leaf θ: <span className="text-amber-300 font-bold">{(scope?.leafAngleDeg ?? 0).toFixed(1)}°</span></div>
+                  <div>Scope Q: <span className="text-cyan-300 font-bold">{(scope?.charge ?? 0) > 0.05 ? `+${(scope?.charge ?? 0).toFixed(1)}` : (scope?.charge ?? 0).toFixed(1)} nC</span></div>
+                </>
+              );
+            })()}
+          </div>
         ) : (
-          <div className="hidden sm:flex items-center gap-4 font-mono text-xs text-slate-300 tabular-nums">
+          <div className="hidden sm:flex items-center gap-4 font-mono text-xs lg:text-[13px] text-slate-200 tabular-nums">
             <div>Objects: <span className="text-cyan-400 font-bold">{objects.length}</span></div>
             <div>Probe: <span className="text-emerald-400 font-bold">{probeData.voltageV} V</span></div>
             <div>|E|: <span className="text-pink-400 font-bold">{probeData.fieldMagnitude} N/C</span></div>
@@ -1032,7 +1191,7 @@ export default function App() {
       <main className="flex-1 p-2 overflow-hidden flex flex-col lg:flex-row gap-2">
         {activeTab === 'sandbox' && (
           <>
-            {/* 1. Left Toolbar: Object 1 (Module 1), Catalogue (Module 2), or Point Charges (Module 3) */}
+            {/* 1. Left Toolbar */}
             {!isStageExpanded && (
               <ObjectSelectorToolbar
                 moduleMode={moduleMode}
@@ -1050,6 +1209,7 @@ export default function App() {
                 onAddPointCharge={handleAddPointCharge}
                 onUpdatePointCharge={handleUpdatePointCharge}
                 onLoadPointChargePreset={handleLoadPointChargePreset}
+                guidedElectroscopeMode={guidedElectroscopeMode}
               />
             )}
 
@@ -1211,6 +1371,114 @@ export default function App() {
                 </div>
               )}
 
+              {moduleMode === 'module4' && (() => {
+                const guide = getElectroscopeGuideState(objects);
+                const scope = objects.find((o) => o.shape === 'electroscope');
+                const selectedRub =
+                  objects.find(
+                    (o) => o.id === selectedObjectId && o.shape !== 'electroscope' && o.shape !== 'point_charge'
+                  ) || objects.find((o) => o.shape !== 'electroscope' && o.shape !== 'point_charge');
+                const rubPartner = selectedRub
+                  ? objects.find(
+                      (o) => o.id !== selectedRub.id && o.shape !== 'electroscope' && o.shape !== 'point_charge'
+                    )
+                  : undefined;
+
+                return (
+                  <div className="rounded-xl px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs lg:text-[13px] shrink-0 border bg-slate-900/95 border-slate-800">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => setGuidedElectroscopeMode((v) => !v)}
+                        className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
+                          guidedElectroscopeMode
+                            ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                            : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
+                        }`}
+                        title="Toggle step-by-step student guidance on or off"
+                      >
+                        <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Guide: {guidedElectroscopeMode ? 'ON' : 'OFF'}</span>
+                      </button>
+
+                      {guidedElectroscopeMode && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-950/60 border border-amber-500/40 text-amber-200 font-semibold text-xs whitespace-nowrap">
+                          {guide.shortTitle}
+                        </span>
+                      )}
+
+                      {selectedRub && (
+                        <button
+                          onClick={() => handleSingleRub(selectedRub.id)}
+                          className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                            guidedElectroscopeMode && guide.step === 2
+                              ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-slate-900'
+                              : ''
+                          }`}
+                        >
+                          <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                          <span>Rub {selectedRub.name}</span>
+                        </button>
+                      )}
+
+                      {selectedRub && rubPartner && (
+                        <button
+                          onClick={() => handleTriggerFriction(selectedRub.id, rubPartner.id)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
+                        >
+                          Rub Pair Together
+                        </button>
+                      )}
+
+                      {scope && (
+                        <button
+                          onClick={() =>
+                            setObjects((prev) =>
+                              prev.map((o) =>
+                                o.id === scope.id ? { ...o, isGrounded: !o.isGrounded } : o
+                              )
+                            )
+                          }
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
+                            scope.isGrounded
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                              : guidedElectroscopeMode && guide.step === 4
+                              ? 'bg-emerald-950/70 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/40'
+                              : 'bg-slate-950 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50'
+                          }`}
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          <span>{scope.isGrounded ? 'Grounded (0 V)' : 'Ground Knob'}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 font-mono text-xs">
+                      <button
+                        onClick={() =>
+                          setObjects((prev) =>
+                            prev.map((o) =>
+                              o.shape === 'electroscope'
+                                ? { ...o, charge: 0, leafChargeNc: 0, knobChargeNc: 0, isGrounded: false }
+                                : o
+                            )
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-400/60 text-slate-200 font-semibold whitespace-nowrap shrink-0"
+                      >
+                        Discharge Scope
+                      </button>
+                      <button
+                        onClick={handleResetScene}
+                        className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-200 font-semibold flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset Bench</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex-1 min-h-0">
                 <SimulationCanvas
                   moduleMode={moduleMode}
@@ -1227,11 +1495,13 @@ export default function App() {
                   singleRubEvent={singleRubEvent}
                   isStageExpanded={isStageExpanded}
                   onToggleExpandStage={() => setIsStageExpanded((v) => !v)}
+                  guidedElectroscopeMode={guidedElectroscopeMode}
+                  onToggleGuidedElectroscope={() => setGuidedElectroscopeMode((v) => !v)}
                 />
               </div>
             </div>
 
-            {/* 3. Right: Object 2 (Module 1) OR Physics Controls & Advanced Inspector (Module 2) */}
+            {/* 3. Right: Object 2 (Module 1) OR Physics Controls & Advanced Inspector */}
             {!isStageExpanded && (
               <ControlPanel
                 moduleMode={moduleMode}
@@ -1249,6 +1519,8 @@ export default function App() {
                 onSingleRub={handleSingleRub}
                 onClearSlot={handleClearSlot}
                 onResetScene={handleResetScene}
+                guidedElectroscopeMode={guidedElectroscopeMode}
+                onToggleGuidedElectroscope={() => setGuidedElectroscopeMode((v) => !v)}
               />
             )}
           </>

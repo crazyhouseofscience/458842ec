@@ -14,6 +14,7 @@ import {
   BookOpen,
   BarChart2,
   HelpCircle,
+  Gauge,
 } from 'lucide-react';
 
 interface StartupScreenProps {
@@ -175,8 +176,8 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
               </p>
             </div>
 
-            {/* 3 Primary Module Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 4 Primary Module Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
               {/* Module 1 */}
               <button
                 onClick={() => onSelectModule('module1')}
@@ -284,6 +285,43 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
 
                 <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs font-bold text-pink-300">
                   <span>Launch Point Charges</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+
+              {/* Module 4: Gold-Leaf Electroscope */}
+              <button
+                onClick={() => onSelectModule('module4')}
+                className="group text-left bg-slate-900/95 hover:bg-slate-900 border border-slate-800 hover:border-amber-400/80 rounded-2xl p-5 flex flex-col justify-between gap-4 transition-all shadow-xl hover:shadow-amber-950/25 active:scale-[0.995]"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                      <Gauge className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400">
+                      Module 04
+                    </span>
+                  </div>
+
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-100 group-hover:text-amber-300 transition-colors">
+                      Gold-Leaf Electroscope
+                    </h2>
+                    <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                      Rub classroom objects and test induction, conduction, and permanent 0 V grounding on a realistic glass-jar gold-leaf electroscope.
+                    </p>
+                  </div>
+
+                  <ul className="space-y-1 text-xs font-mono text-slate-400 pt-1">
+                    <li>• Hinged 24k gold-foil leaves (θ°)</li>
+                    <li>• Induction &amp; knob conduction</li>
+                    <li>• Multiple rubbable lab materials</li>
+                  </ul>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs font-bold text-amber-300">
+                  <span>Launch Electroscope</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
               </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MATERIALS_DATABASE } from '../physics/materialsData';
 import { ElectroObject, ModuleMode } from '../types/electrostatics';
+import { getElectroscopeGuideState } from '../utils/electroscopeGuide';
 import {
   Sparkles,
   Plus,
@@ -13,6 +14,7 @@ import {
   Crosshair,
   Pin,
   Minus,
+  Gauge,
 } from 'lucide-react';
 
 interface ObjectSelectorToolbarProps {
@@ -31,6 +33,7 @@ interface ObjectSelectorToolbarProps {
   onAddPointCharge?: (chargeNc: number) => void;
   onUpdatePointCharge?: (id: string, updates: Partial<ElectroObject>) => void;
   onLoadPointChargePreset?: (presetKey: string) => void;
+  guidedElectroscopeMode?: boolean;
 }
 
 export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
@@ -49,11 +52,13 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
   onAddPointCharge,
   onUpdatePointCharge,
   onLoadPointChargePreset,
+  guidedElectroscopeMode = true,
 }) => {
   const [activeCategory, setActiveCategory] = useState<'all' | 'positive' | 'negative' | 'neutral_dielectric' | 'conductors'>('all');
   const [frictionTargetId, setFrictionTargetId] = useState<string>('');
 
   const materialList = Object.values(MATERIALS_DATABASE);
+  const specimenMaterials = materialList.filter((m) => m.id !== 'electroscope');
   const filteredMaterials = materialList.filter((m) => {
     if (activeCategory === 'positive') return m.triboOrder > 2;
     if (activeCategory === 'negative') return m.triboOrder < -2;
@@ -73,7 +78,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
 
     return (
       <aside
-        className={`w-full lg:w-[244px] xl:w-[260px] h-full bg-slate-900/95 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-hidden border transition-all ${
+        className={`w-full lg:w-[258px] xl:w-[274px] h-full bg-slate-900/95 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-hidden border transition-all ${
           needsObj1
             ? 'border-orange-400 ring-2 ring-orange-400/40 shadow-[0_0_26px_rgba(251,146,60,0.20)]'
             : 'border-slate-800'
@@ -176,11 +181,11 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
               <ArrowLeftRight className="w-4 h-4 text-orange-400" />
               <span>{needsObj1 ? 'Pick Object 1 Material' : 'Object 1 Materials'}</span>
             </span>
-            <span className="text-xs font-mono text-slate-400">{materialList.length} items</span>
+            <span className="text-xs font-mono text-slate-400">{specimenMaterials.length} items</span>
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 content-start flex-1">
-            {materialList.map((mat) => {
+            {specimenMaterials.map((mat) => {
               const isSelectedMat = obj1?.materialId === mat.id;
               return (
                 <button
@@ -201,7 +206,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
                     />
                     <div className="min-w-0">
                       <div className="text-[13px] font-semibold leading-tight truncate">{mat.name}</div>
-                      <div className="text-[11px] text-slate-400 truncate font-mono mt-0.5">
+                      <div className="text-xs text-slate-400 truncate font-mono mt-0.5">
                         {mat.triboOrder > 0
                           ? `+${mat.triboOrder} Donor`
                           : mat.triboOrder < 0
@@ -225,10 +230,10 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
   // Module 3: Point Charges Catalogue & Live Charge List
   if (moduleMode === 'module3') {
     return (
-      <aside className="w-full lg:w-[254px] xl:w-[270px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 flex flex-col gap-2.5 text-slate-100 shadow-2xl shrink-0 overflow-y-auto">
+      <aside className="w-full lg:w-[258px] xl:w-[274px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-y-auto">
         {/* 1. Add Point Charges (Primary Action from Blank Stage) */}
         <div
-          className={`space-y-1.5 pb-2.5 border-b shrink-0 rounded-xl p-2 transition-all ${
+          className={`space-y-1.5 pb-2 border-b shrink-0 rounded-xl p-2 transition-all ${
             objects.length === 0
               ? 'bg-orange-950/30 border-orange-400/70'
               : 'border-slate-800 bg-slate-950/40'
@@ -239,7 +244,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
               <Plus className="w-3.5 h-3.5 text-cyan-400" />
               <span>Add Point Charge</span>
             </span>
-            <span className="text-[11px] font-mono text-slate-400">
+            <span className="text-xs font-mono text-slate-300">
               {objects.length === 0 ? 'Step 1' : `${objects.length} active`}
             </span>
           </div>
@@ -403,33 +408,261 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
             <button
               onClick={() => onLoadPointChargePreset?.('dipole')}
-              className="p-1.5 bg-slate-950/75 border border-slate-800 hover:border-cyan-400/70 rounded-xl text-left transition-all"
+              className="p-2 bg-slate-950/75 border border-slate-800 hover:border-cyan-400/70 rounded-xl text-left transition-all"
             >
               <div className="font-semibold text-slate-100 leading-tight">Dipole (+/−)</div>
             </button>
 
             <button
               onClick={() => onLoadPointChargePreset?.('repel_pos')}
-              className="p-1.5 bg-slate-950/75 border border-slate-800 hover:border-sky-400/70 rounded-xl text-left transition-all"
+              className="p-2 bg-slate-950/75 border border-slate-800 hover:border-sky-400/70 rounded-xl text-left transition-all"
             >
               <div className="font-semibold text-slate-100 leading-tight">Like (+/+)</div>
             </button>
 
             <button
               onClick={() => onLoadPointChargePreset?.('quadrupole')}
-              className="p-1.5 bg-slate-950/75 border border-slate-800 hover:border-amber-400/70 rounded-xl text-left transition-all"
+              className="p-2 bg-slate-950/75 border border-slate-800 hover:border-amber-400/70 rounded-xl text-left transition-all"
             >
               <div className="font-semibold text-slate-100 leading-tight">Quadrupole</div>
             </button>
 
             <button
               onClick={() => onLoadPointChargePreset?.('triangle')}
-              className="p-1.5 bg-slate-950/75 border border-slate-800 hover:border-orange-400/70 rounded-xl text-left transition-all"
+              className="p-2 bg-slate-950/75 border border-slate-800 hover:border-orange-400/70 rounded-xl text-left transition-all"
             >
               <div className="font-semibold text-slate-100 leading-tight">3-Charge Triad</div>
+            </button>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  // Module 4: Electroscope Lab — Organized Top-to-Bottom by Student Workflow (Add -> Rub -> Quick Labs)
+  if (moduleMode === 'module4') {
+    const guide = getElectroscopeGuideState(objects);
+    const rubbableObjects = objects.filter((o) => o.shape !== 'electroscope' && o.shape !== 'point_charge');
+    const selectedRubbable = rubbableObjects.find((o) => o.id === selectedObjectId) || rubbableObjects[0];
+    const rubPairCandidates = selectedRubbable ? rubbableObjects.filter((o) => o.id !== selectedRubbable.id) : [];
+    const activePairTarget =
+      rubPairCandidates.find((o) => o.id === frictionTargetId) || rubPairCandidates[0];
+    const highlightStep1 = guidedElectroscopeMode && guide.step === 1;
+    const highlightStep2 = guidedElectroscopeMode && guide.step === 2;
+
+    return (
+      <aside className="w-full lg:w-[266px] xl:w-[284px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-hidden">
+        {/* Step 1: Add Classroom Objects (Primary First Action) */}
+        <div
+          className={`rounded-xl p-2 border transition-all flex flex-col gap-1.5 min-h-0 flex-1 ${
+            highlightStep1
+              ? 'bg-amber-950/35 border-amber-400 ring-2 ring-amber-400/35 shadow-[0_0_22px_rgba(251,191,36,0.18)]'
+              : 'bg-slate-950/45 border-slate-800'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1.5 shrink-0">
+            <span className={`flex items-center gap-1.5 text-[13px] font-bold ${highlightStep1 ? 'text-amber-300' : 'text-slate-100'}`}>
+              <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{guidedElectroscopeMode ? 'Step 1 · Add Object' : 'Add Objects'}</span>
+            </span>
+            {highlightStep1 ? (
+              <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[11px] font-extrabold uppercase tracking-wide shrink-0">
+                Start Here
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400 font-mono">{specimenMaterials.length} items</span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 content-start flex-1">
+            {specimenMaterials.map((mat) => (
+              <button
+                key={mat.id}
+                onClick={() => onAddObject(mat.id)}
+                className={`px-2 py-1.5 rounded-xl border text-left flex items-center justify-between gap-1.5 transition-all ${
+                  highlightStep1
+                    ? 'bg-slate-950/90 border-amber-400/45 hover:border-amber-300 hover:bg-amber-950/40'
+                    : 'bg-slate-950/75 border-slate-800/80 hover:border-amber-400/60 hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div
+                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: mat.color }}
+                  />
+                  <span className="text-[13px] font-semibold text-slate-100 truncate">{mat.name}</span>
+                </div>
+                <span
+                  className={`text-[11px] font-mono font-bold shrink-0 ${
+                    mat.triboOrder > 0 ? 'text-cyan-400' : mat.triboOrder < 0 ? 'text-pink-400' : 'text-slate-400'
+                  }`}
+                >
+                  {mat.triboOrder > 0 ? '+' : mat.triboOrder < 0 ? '−' : 'C'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Step 2: Bench Test Objects & Charge / Rub */}
+        <div
+          className={`rounded-xl p-2 border transition-all space-y-1.5 shrink-0 ${
+            highlightStep2
+              ? 'bg-amber-950/35 border-amber-400 ring-2 ring-amber-400/35 shadow-[0_0_22px_rgba(251,191,36,0.18)]'
+              : 'bg-slate-950/45 border-slate-800'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1.5">
+            <span className={`flex items-center gap-1.5 text-[13px] font-bold ${highlightStep2 ? 'text-amber-300' : 'text-slate-100'}`}>
+              <Layers className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                {guidedElectroscopeMode ? 'Step 2 · Charge Object' : `Bench Objects (${rubbableObjects.length})`}
+              </span>
+            </span>
+            {highlightStep2 && (
+              <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[11px] font-extrabold uppercase tracking-wide shrink-0">
+                Click Rub
+              </span>
+            )}
+          </div>
+
+          {rubbableObjects.length === 0 ? (
+            <div className="px-2.5 py-2 rounded-lg bg-slate-950/70 border border-dashed border-slate-800 text-xs text-slate-300 text-center">
+              Electroscope centered. Add a material above to test!
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
+              {rubbableObjects.map((obj) => {
+                const mat = MATERIALS_DATABASE[obj.materialId];
+                const isSelected = selectedObjectId === obj.id;
+                return (
+                  <div
+                    key={obj.id}
+                    onClick={() => setSelectedObjectId(obj.id)}
+                    className={`px-2 py-1.5 rounded-xl border flex items-center justify-between gap-1.5 cursor-pointer transition-all ${
+                      isSelected
+                        ? 'bg-amber-950/45 border-amber-400 text-slate-100'
+                        : 'bg-slate-950/75 border-slate-800 text-slate-200 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div
+                        className="w-2.5 h-2.5 rounded-sm shrink-0"
+                        style={{ backgroundColor: mat?.color || '#94a3b8' }}
+                      />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold truncate leading-tight">{obj.name}</div>
+                        <div
+                          className={`text-xs font-mono tabular-nums ${
+                            obj.charge > 0.1
+                              ? 'text-cyan-300'
+                              : obj.charge < -0.1
+                              ? 'text-pink-300'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {obj.charge > 0.05 ? `+${obj.charge.toFixed(1)}` : obj.charge.toFixed(1)} nC
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedObjectId(obj.id);
+                          onSingleRub(obj.id);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs flex items-center gap-1 ${
+                          highlightStep2 ? 'ring-2 ring-amber-200' : ''
+                        }`}
+                        title="Rub with exciter cloth"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+                        <span>Rub</span>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveObject(obj.id);
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40"
+                        title="Remove object"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Compact Pair Rub Option when 2+ test objects are placed */}
+          {selectedRubbable && activePairTarget && (
+            <div className="pt-1 border-t border-slate-800/80 flex items-center gap-1.5">
+              <select
+                value={activePairTarget.id}
+                onChange={(e) => setFrictionTargetId(e.target.value)}
+                className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-400"
+              >
+                {rubPairCandidates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    vs {t.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => onTriggerFriction(selectedRubbable.id, activePairTarget.id)}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-200 font-bold text-xs rounded-lg whitespace-nowrap shrink-0 flex items-center gap-1"
+              >
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <span>Rub Pair</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Quick 1-Click Experiments */}
+        <div className="space-y-1.5 pt-1 border-t border-slate-800 shrink-0">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-amber-400 uppercase tracking-wider">
+              <Gauge className="w-3.5 h-3.5" />
+              <span>Quick Labs</span>
+            </span>
+            <span className="text-xs text-slate-400 font-mono">1-Click</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <button
+              onClick={() => onLoadScenario('scope_ruler_wool')}
+              className="px-2 py-1.5 bg-slate-950/75 border border-slate-800 hover:border-amber-400/70 rounded-xl text-left transition-all"
+            >
+              <div className="font-semibold text-slate-100 leading-tight">Ruler + Wool</div>
+            </button>
+
+            <button
+              onClick={() => onLoadScenario('scope_glass_silk')}
+              className="px-2 py-1.5 bg-slate-950/75 border border-slate-800 hover:border-sky-400/70 rounded-xl text-left transition-all"
+            >
+              <div className="font-semibold text-slate-100 leading-tight">Glass + Silk</div>
+            </button>
+
+            <button
+              onClick={() => onLoadScenario('scope_induction_demo')}
+              className="px-2 py-1.5 bg-slate-950/75 border border-slate-800 hover:border-emerald-400/70 rounded-xl text-left transition-all"
+            >
+              <div className="font-semibold text-slate-100 leading-tight">Induction Lab</div>
+            </button>
+
+            <button
+              onClick={() => onLoadScenario('scope_charged_test')}
+              className="px-2 py-1.5 bg-slate-950/75 border border-slate-800 hover:border-pink-400/70 rounded-xl text-left transition-all"
+            >
+              <div className="font-semibold text-slate-100 leading-tight">Polarity Test</div>
             </button>
           </div>
         </div>
@@ -450,25 +683,25 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
   };
 
   return (
-    <aside className="w-full lg:w-64 xl:w-[272px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-3 flex flex-col gap-3.5 text-slate-100 shadow-2xl shrink-0 overflow-y-auto">
+    <aside className="w-full lg:w-[264px] xl:w-[280px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 flex flex-col gap-3 text-slate-100 shadow-2xl shrink-0 overflow-y-auto">
       {/* 1. Guided Starter Scenarios & Practical Engineering Apps */}
-      <div className="space-y-2 pb-3 border-b border-slate-800">
+      <div className="space-y-2 pb-2.5 border-b border-slate-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-400 uppercase tracking-wider">
             <Wand2 className="w-3.5 h-3.5" />
             <span>Learning Setups</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-mono">1-Click</span>
+          <span className="text-xs text-slate-400 font-mono">1-Click</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+        <div className="grid grid-cols-2 gap-1.5 text-xs">
           <button
             onClick={() => onLoadScenario('classic_silk_glass')}
             className="p-2 bg-slate-950/70 border border-slate-800 hover:border-cyan-500/50 hover:bg-cyan-950/20 rounded-xl text-left transition-all group"
             title="Glass Rod & Silk Fabric (Classic positive donor)"
           >
-            <div className="font-semibold text-slate-200 group-hover:text-cyan-300">Glass + Silk</div>
-            <div className="text-[10px] text-slate-500">Tribo Donor (+)</div>
+            <div className="font-semibold text-slate-100 group-hover:text-cyan-300">Glass + Silk</div>
+            <div className="text-[11px] text-slate-400">Tribo Donor (+)</div>
           </button>
 
           <button
@@ -476,8 +709,8 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className="p-2 bg-slate-950/70 border border-slate-800 hover:border-pink-500/50 hover:bg-pink-950/20 rounded-xl text-left transition-all group"
             title="Fur & Teflon Balloon (Extreme negative acceptor)"
           >
-            <div className="font-semibold text-slate-200 group-hover:text-pink-300">Fur + Balloon</div>
-            <div className="text-[10px] text-slate-500">Tribo Acceptor (-)</div>
+            <div className="font-semibold text-slate-100 group-hover:text-pink-300">Fur + Balloon</div>
+            <div className="text-[11px] text-slate-400">Tribo Acceptor (-)</div>
           </button>
 
           <button
@@ -485,8 +718,8 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className="p-2 bg-slate-950/70 border border-slate-800 hover:border-amber-500/50 hover:bg-amber-950/20 rounded-xl text-left transition-all group"
             title="Charged Balloon & Neutral Paper strips (Dielectric induction)"
           >
-            <div className="font-semibold text-slate-200 group-hover:text-amber-300">Balloon + Paper</div>
-            <div className="text-[10px] text-slate-500">Induced Dipoles</div>
+            <div className="font-semibold text-slate-100 group-hover:text-amber-300">Balloon + Paper</div>
+            <div className="text-[11px] text-slate-400">Induced Dipoles</div>
           </button>
 
           <button
@@ -494,24 +727,24 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className="p-2 bg-slate-950/70 border border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-950/20 rounded-xl text-left transition-all group"
             title="Copper Conductor & Earth Ground Plate (Conduction & Grounding)"
           >
-            <div className="font-semibold text-slate-200 group-hover:text-emerald-300">Copper + Ground</div>
-            <div className="text-[10px] text-slate-500">Conduction & Drain</div>
+            <div className="font-semibold text-slate-100 group-hover:text-emerald-300">Copper + Ground</div>
+            <div className="text-[11px] text-slate-400">Conduction & Drain</div>
           </button>
         </div>
 
         {/* Real-Life Practical Engineering Applications */}
-        <div className="pt-1.5">
-          <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
+        <div className="pt-1">
+          <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
             Practical Engineering Apps
           </div>
-          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
             <button
               onClick={() => onLoadScenario('electrostatic_precipitator')}
               className="p-2 bg-emerald-950/25 border border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/40 rounded-xl text-left transition-all group"
               title="Industrial Electrostatic Precipitator: ionized fly-ash & soot captured via damped Coulomb drift"
             >
               <div className="font-semibold text-emerald-200 group-hover:text-emerald-300 truncate">Air Scrubber</div>
-              <div className="text-[10px] text-slate-400 truncate">Ash Precipitator</div>
+              <div className="text-[11px] text-slate-300 truncate">Ash Precipitator</div>
             </button>
 
             <button
@@ -520,24 +753,24 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
               title="Laser Printer Toner Transfer: polymer toner beads attracted to photoconductor drum"
             >
               <div className="font-semibold text-sky-200 group-hover:text-sky-300 truncate">Laser Toner</div>
-              <div className="text-[10px] text-slate-400 truncate">Xerography Drum</div>
+              <div className="text-[11px] text-slate-300 truncate">Xerography Drum</div>
             </button>
           </div>
         </div>
       </div>
 
       {/* 2. Stage Objects List (Active / Inactive Selection) */}
-      <div className="space-y-2 pb-3 border-b border-slate-800">
+      <div className="space-y-1.5 pb-2.5 border-b border-slate-800">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200 uppercase tracking-wider">
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
             <span>Stage Objects ({objects.length})</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-mono">Active / Inactive</span>
+          <span className="text-[11px] text-slate-400 font-mono">Active / Inactive</span>
         </div>
 
         {objects.length === 0 ? (
-          <div className="p-3 bg-slate-950/50 border border-dashed border-slate-800 rounded-xl text-center text-[11px] text-slate-500">
+          <div className="p-2.5 bg-slate-950/50 border border-dashed border-slate-800 rounded-xl text-center text-xs text-slate-400">
             No objects on stage. Click a material below to add one.
           </div>
         ) : (
@@ -553,7 +786,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
                   className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
                     isSelected
                       ? 'bg-cyan-950/70 border-cyan-500 text-slate-100 shadow-md shadow-cyan-950/40'
-                      : 'bg-slate-950/50 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      : 'bg-slate-950/50 border-slate-800/80 text-slate-300 hover:border-slate-700 hover:text-slate-100'
                   }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -562,21 +795,21 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
                       style={{ backgroundColor: mat?.color || '#94a3b8' }}
                     />
                     <div className="min-w-0">
-                      <div className="truncate text-xs font-semibold">{obj.name}</div>
-                      <div className={`text-[10px] font-mono ${isSelected ? 'text-cyan-300' : 'text-slate-500'}`}>
+                      <div className="truncate text-[13px] font-semibold">{obj.name}</div>
+                      <div className={`text-[11px] font-mono ${isSelected ? 'text-cyan-300' : 'text-slate-400'}`}>
                         {isSelected ? 'Active' : 'Inactive'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 font-mono text-[11px] tabular-nums">
+                  <div className="flex items-center gap-2 shrink-0 font-mono text-xs tabular-nums">
                     <span
                       className={`font-bold ${
                         obj.charge > 0.05
                           ? 'text-cyan-400'
                           : obj.charge < -0.05
                           ? 'text-pink-400'
-                          : 'text-slate-500'
+                          : 'text-slate-400'
                       }`}
                     >
                       {obj.charge > 0.05 ? `+${obj.charge.toFixed(1)}` : obj.charge.toFixed(1)} nC
@@ -587,10 +820,10 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
                         e.stopPropagation();
                         onRemoveObject(obj.id);
                       }}
-                      className="p-1 hover:text-rose-400 hover:bg-rose-950/50 rounded transition-colors text-slate-600"
+                      className="p-1 hover:text-rose-400 hover:bg-rose-950/50 rounded transition-colors text-slate-400"
                       title="Remove object"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -602,16 +835,16 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
 
       {/* 3. Friction Action Controller */}
       {selectedObject && objects.length >= 2 && (
-        <div className="p-3 bg-gradient-to-br from-cyan-950/40 to-slate-950 border border-cyan-500/30 rounded-xl space-y-2.5">
+        <div className="p-2.5 bg-gradient-to-br from-cyan-950/40 to-slate-950 border border-cyan-500/30 rounded-xl space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-amber-400" />
               <span>Apply Friction Action</span>
             </span>
-            <span className="text-[10px] text-amber-400/80 font-mono">Charge Imbalance</span>
+            <span className="text-[11px] text-amber-400/90 font-mono">ΔW Flow</span>
           </div>
 
-          <div className="text-[11px] text-slate-300">
+          <div className="text-xs text-slate-200">
             Rub <span className="font-bold text-cyan-300">{selectedObject.name}</span> against:
           </div>
 
@@ -640,23 +873,23 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
       )}
 
       {/* 4. Material Catalogue & Add Object */}
-      <div className="space-y-2.5 flex-1 flex flex-col">
+      <div className="space-y-2 flex-1 flex flex-col">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300 uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200 uppercase tracking-wider">
             <Plus className="w-3.5 h-3.5 text-emerald-400" />
             <span>Add New Material</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-mono">Catalogue</span>
+          <span className="text-[11px] text-slate-400 font-mono">Catalogue</span>
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex flex-wrap gap-1 text-[10px] font-medium">
+        <div className="flex flex-wrap gap-1 text-[11px] font-medium">
           <button
             onClick={() => setActiveCategory('all')}
             className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
               activeCategory === 'all'
                 ? 'bg-slate-800 text-cyan-300 font-bold'
-                : 'text-slate-400 hover:text-slate-200 bg-slate-950/50'
+                : 'text-slate-300 hover:text-white bg-slate-950/50'
             }`}
           >
             All
@@ -666,7 +899,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
               activeCategory === 'positive'
                 ? 'bg-sky-950 text-sky-300 border border-sky-500/40 font-bold'
-                : 'text-slate-400 hover:text-slate-200 bg-slate-950/50'
+                : 'text-slate-300 hover:text-white bg-slate-950/50'
             }`}
           >
             (+) Donors
@@ -676,7 +909,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
               activeCategory === 'negative'
                 ? 'bg-pink-950 text-pink-300 border border-pink-500/40 font-bold'
-                : 'text-slate-400 hover:text-slate-200 bg-slate-950/50'
+                : 'text-slate-300 hover:text-white bg-slate-950/50'
             }`}
           >
             (-) Acceptors
@@ -686,7 +919,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
               activeCategory === 'neutral_dielectric'
                 ? 'bg-amber-950 text-amber-300 border border-amber-500/40 font-bold'
-                : 'text-slate-400 hover:text-slate-200 bg-slate-950/50'
+                : 'text-slate-300 hover:text-white bg-slate-950/50'
             }`}
           >
             Dielectrics
@@ -696,7 +929,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             className={`px-2 py-1 rounded-md transition-all whitespace-nowrap ${
               activeCategory === 'conductors'
                 ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-bold'
-                : 'text-slate-400 hover:text-slate-200 bg-slate-950/50'
+                : 'text-slate-300 hover:text-white bg-slate-950/50'
             }`}
           >
             Conductors
@@ -721,19 +954,19 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
                     style={{ backgroundColor: mat.color }}
                   />
                   <div className="truncate">
-                    <div className="text-xs font-semibold text-slate-200 group-hover:text-cyan-300">
+                    <div className="text-[13px] font-semibold text-slate-100 group-hover:text-cyan-300">
                       {mat.name}
                     </div>
-                    <div className="text-[10px] text-slate-500 truncate font-mono">
+                    <div className="text-[11px] text-slate-400 truncate font-mono">
                       W={mat.workFunctionEv}eV · m={mat.massGrams}g · εr={mat.dielectricConstant}
                     </div>
                   </div>
                 </div>
 
-                <div className="shrink-0 text-right font-mono text-[10px]">
+                <div className="shrink-0 text-right font-mono text-xs">
                   {isPositive && <span className="text-cyan-400 font-bold">+{mat.triboOrder}</span>}
                   {isNegative && <span className="text-pink-400 font-bold">{mat.triboOrder}</span>}
-                  {mat.triboOrder === 0 && <span className="text-slate-500">0</span>}
+                  {mat.triboOrder === 0 && <span className="text-slate-400">0</span>}
                 </div>
               </button>
             );
