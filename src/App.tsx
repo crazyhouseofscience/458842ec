@@ -7,7 +7,7 @@ import {
   ModuleMode,
 } from './types/electrostatics';
 import { INITIAL_PRESET_OBJECTS, MATERIALS_DATABASE } from './physics/materialsData';
-import { updateSurfaceChargeDots } from './physics/electrostaticsEngine';
+import { updateSurfaceChargeDots, rubSingleObjectWithLabCloth } from './physics/electrostaticsEngine';
 
 import { TopBar } from './components/TopBar';
 import { ObjectSelectorToolbar } from './components/ObjectSelectorToolbar';
@@ -21,7 +21,7 @@ import { AIAssistantModal } from './components/AIAssistantModal';
 import { StartupScreen } from './components/StartupScreen';
 import { getElectroscopeGuideState } from './utils/electroscopeGuide';
 
-import { Zap, Sparkles, Plus, Minus, Play, Pause, RotateCcw, Grid3x3, Shield, Compass } from 'lucide-react';
+import { Zap, Sparkles, Plus, Minus, Play, Pause, RotateCcw, Grid3x3, Shield, Compass, Check, Lock } from 'lucide-react';
 
 function clonePreset(obj: ElectroObject): ElectroObject {
   return {
@@ -196,6 +196,7 @@ export default function App() {
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [isStageExpanded, setIsStageExpanded] = useState(false);
   const [guidedElectroscopeMode, setGuidedElectroscopeMode] = useState<boolean>(true);
+  const [stagedPrepObject, setStagedPrepObject] = useState<ElectroObject | null>(null);
 
   const [overlayConfig, setOverlayConfig] = useState<VisualOverlayConfig>({
     showFieldVectors: false,
@@ -343,6 +344,7 @@ export default function App() {
   const handleSwitchModule = (nextMode: ModuleMode) => {
     setActiveTab('sandbox');
     setIsStageExpanded(false);
+    setStagedPrepObject(null);
     setModuleMode(nextMode);
     if (nextMode === 'module1') {
       setObjects((prev) => {
@@ -636,15 +638,110 @@ export default function App() {
     };
 
     updateSurfaceChargeDots(newObj);
+
+    // In Guided Electroscope mode, stage the object in the Prep Station so the student rubs it BEFORE placing it on the stage
+    if (moduleMode === 'module4' && guidedElectroscopeMode) {
+      setStagedPrepObject(newObj);
+      setFrictionLog(
+        materialId === 'ground'
+          ? `Prepared ${mat.name} (0 V). Click "Place on Stage" to add it beside the electroscope.`
+          : `Step 2: Rub your ${mat.name} in the Prep Station to charge it before placing it on the stage!`
+      );
+      return;
+    }
+
     setObjects((prev) => [...prev, newObj]);
     setSelectedObjectId(newObj.id);
     if (moduleMode === 'module4') {
       setFrictionLog(
-        `Added ${mat.name}. Next: click "Rub" to charge it, then drag it near the brass knob!`
+        `Added ${mat.name}. Click "Rub" to charge it, then drag it near the brass knob!`
       );
     } else {
       setFrictionLog(`Added ${mat.name} (${mat.massGrams} g, ρ=${mat.densityGCm3} g/cm³). Work Function W = ${mat.workFunctionEv} eV.`);
     }
+  };
+
+  const handleRubStagedPrep = () => {
+    if (!stagedPrepObject) return;
+    const cloned: ElectroObject = {
+      ...stagedPrepObject,
+      surfaceCharges: stagedPrepObject.surfaceCharges.map((sc) => ({ ...sc })),
+      dipoles: stagedPrepObject.dipoles.map((d) => ({ ...d })),
+    };
+    const result = rubSingleObjectWithLabCloth(cloned);
+    setStagedPrepObject(cloned);
+    if (result) {
+      setFrictionLog(`${result.text} Click "Place on Stage →" when ready!`);
+    }
+  };
+
+  const handlePlaceStagedPrep = () => {
+    if (!stagedPrepObject) return;
+    if (stagedPrepObject.materialId !== 'ground' && Math.abs(stagedPrepObject.charge) < 0.5) {
+      setFrictionLog(`Rub your ${stagedPrepObject.name} at least once to charge it before placing it on the stage!`);
+      return;
+    }
+
+    const testCount = objects.filter((o) => o.shape !== 'electroscope' && o.shape !== 'point_charge').length;
+    const slots: Array<[number, number]> = [
+      [155, 165],
+      [155, 325],
+      [615, 165],
+      [615, 325],
+      [155, 245],
+      [615, 245],
+    ];
+    const [slotX, slotY] = slots[testCount % slots.length];
+    const placed: ElectroObject = {
+      ...stagedPrepObject,
+      x: slotX,
+      y: slotY,
+      surfaceCharges: stagedPrepObject.surfaceCharges.map((sc) => ({ ...sc })),
+      dipoles: stagedPrepObject.dipoles.map((d) => ({ ...d })),
+    };
+
+    setObjects((prev) => [...prev, placed]);
+    setSelectedObjectId(placed.id);
+    setStagedPrepObject(null);
+    const chargeText = placed.charge > 0.05 ? `+${placed.charge.toFixed(1)}` : placed.charge.toFixed(1);
+    setFrictionLog(
+      `Placed charged ${placed.name} (${chargeText} nC)! Step 3: Drag it close to the Brass Knob.`
+    );
+  };
+
+  const handleCancelStagedPrep = () => {
+    setStagedPrepObject(null);
+    setFrictionLog('Step 1: Pick any classroom object from the Left panel.');
+  };
+
+  const handleToggleGuidedElectroscope = () => {
+    setGuidedElectroscopeMode((prev) => {
+      const next = !prev;
+      if (!next && stagedPrepObject) {
+        // When turning Guide OFF while an object is in prep, place it directly onto the bench so work isn't lost
+        const testCount = objects.filter((o) => o.shape !== 'electroscope' && o.shape !== 'point_charge').length;
+        const slots: Array<[number, number]> = [
+          [155, 165],
+          [155, 325],
+          [615, 165],
+          [615, 325],
+          [155, 245],
+          [615, 245],
+        ];
+        const [slotX, slotY] = slots[testCount % slots.length];
+        const placed: ElectroObject = {
+          ...stagedPrepObject,
+          x: slotX,
+          y: slotY,
+          surfaceCharges: stagedPrepObject.surfaceCharges.map((sc) => ({ ...sc })),
+          dipoles: stagedPrepObject.dipoles.map((d) => ({ ...d })),
+        };
+        setObjects((curr) => [...curr, placed]);
+        setSelectedObjectId(placed.id);
+        setStagedPrepObject(null);
+      }
+      return next;
+    });
   };
 
   const handleRemoveObject = (id: string) => {
@@ -656,6 +753,7 @@ export default function App() {
 
   // Preset Learning Scenarios & Real-Life Practical Engineering Applications
   const handleLoadScenario = (scenarioKey: string) => {
+    setStagedPrepObject(null);
     if (scenarioKey === 'classic_silk_glass') {
       setObjects([
         { ...clonePreset(INITIAL_PRESET_OBJECTS[0]), x: 420, y: 260, charge: 0 },
@@ -1020,6 +1118,7 @@ export default function App() {
       const scope = createElectroscopeObject(380, 260, 0);
       setObjects([scope]);
       setSelectedObjectId(null);
+      setStagedPrepObject(null);
       setFrictionLog('Electroscope bench reset. Step 1: Pick a classroom object from the Left panel.');
     } else {
       setObjects([]);
@@ -1210,6 +1309,10 @@ export default function App() {
                 onUpdatePointCharge={handleUpdatePointCharge}
                 onLoadPointChargePreset={handleLoadPointChargePreset}
                 guidedElectroscopeMode={guidedElectroscopeMode}
+                stagedPrepObject={stagedPrepObject}
+                onRubStagedPrep={handleRubStagedPrep}
+                onPlaceStagedPrep={handlePlaceStagedPrep}
+                onCancelStagedPrep={handleCancelStagedPrep}
               />
             )}
 
@@ -1372,7 +1475,7 @@ export default function App() {
               )}
 
               {moduleMode === 'module4' && (() => {
-                const guide = getElectroscopeGuideState(objects);
+                const guide = getElectroscopeGuideState(objects, stagedPrepObject);
                 const scope = objects.find((o) => o.shape === 'electroscope');
                 const selectedRub =
                   objects.find(
@@ -1383,12 +1486,16 @@ export default function App() {
                       (o) => o.id !== selectedRub.id && o.shape !== 'electroscope' && o.shape !== 'point_charge'
                     )
                   : undefined;
+                const canPlaceStaged = Boolean(
+                  stagedPrepObject &&
+                    (stagedPrepObject.materialId === 'ground' || Math.abs(stagedPrepObject.charge) >= 0.5)
+                );
 
                 return (
                   <div className="rounded-xl px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs lg:text-[13px] shrink-0 border bg-slate-900/95 border-slate-800">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
-                        onClick={() => setGuidedElectroscopeMode((v) => !v)}
+                        onClick={handleToggleGuidedElectroscope}
                         className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
                           guidedElectroscopeMode
                             ? 'bg-amber-500/20 border-amber-400 text-amber-200'
@@ -1406,27 +1513,57 @@ export default function App() {
                         </span>
                       )}
 
-                      {selectedRub && (
-                        <button
-                          onClick={() => handleSingleRub(selectedRub.id)}
-                          className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
-                            guidedElectroscopeMode && guide.step === 2
-                              ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-slate-900'
-                              : ''
-                          }`}
-                        >
-                          <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
-                          <span>Rub {selectedRub.name}</span>
-                        </button>
-                      )}
+                      {stagedPrepObject ? (
+                        <>
+                          {stagedPrepObject.materialId !== 'ground' && (
+                            <button
+                              onClick={handleRubStagedPrep}
+                              className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                                !canPlaceStaged ? 'ring-2 ring-amber-200 animate-pulse' : ''
+                              }`}
+                            >
+                              <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                              <span>1. Rub {stagedPrepObject.name}</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={handlePlaceStagedPrep}
+                            disabled={!canPlaceStaged}
+                            className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
+                              canPlaceStaged
+                                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-sm active:scale-95'
+                                : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
+                            }`}
+                          >
+                            {canPlaceStaged ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
+                            <span>2. Place on Stage</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {selectedRub && (
+                            <button
+                              onClick={() => handleSingleRub(selectedRub.id)}
+                              className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                                guidedElectroscopeMode && guide.step === 2
+                                  ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-slate-900'
+                                  : ''
+                              }`}
+                            >
+                              <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                              <span>Rub {selectedRub.name}</span>
+                            </button>
+                          )}
 
-                      {selectedRub && rubPartner && (
-                        <button
-                          onClick={() => handleTriggerFriction(selectedRub.id, rubPartner.id)}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
-                        >
-                          Rub Pair Together
-                        </button>
+                          {selectedRub && rubPartner && (
+                            <button
+                              onClick={() => handleTriggerFriction(selectedRub.id, rubPartner.id)}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
+                            >
+                              Rub Pair Together
+                            </button>
+                          )}
+                        </>
                       )}
 
                       {scope && (
@@ -1496,7 +1633,11 @@ export default function App() {
                   isStageExpanded={isStageExpanded}
                   onToggleExpandStage={() => setIsStageExpanded((v) => !v)}
                   guidedElectroscopeMode={guidedElectroscopeMode}
-                  onToggleGuidedElectroscope={() => setGuidedElectroscopeMode((v) => !v)}
+                  onToggleGuidedElectroscope={handleToggleGuidedElectroscope}
+                  stagedPrepObject={stagedPrepObject}
+                  onRubStagedPrep={handleRubStagedPrep}
+                  onPlaceStagedPrep={handlePlaceStagedPrep}
+                  onCancelStagedPrep={handleCancelStagedPrep}
                 />
               </div>
             </div>
@@ -1520,7 +1661,8 @@ export default function App() {
                 onClearSlot={handleClearSlot}
                 onResetScene={handleResetScene}
                 guidedElectroscopeMode={guidedElectroscopeMode}
-                onToggleGuidedElectroscope={() => setGuidedElectroscopeMode((v) => !v)}
+                onToggleGuidedElectroscope={handleToggleGuidedElectroscope}
+                stagedPrepObject={stagedPrepObject}
               />
             )}
           </>

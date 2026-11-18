@@ -53,6 +53,7 @@ interface ControlPanelProps {
   onResetScene: () => void;
   guidedElectroscopeMode?: boolean;
   onToggleGuidedElectroscope?: () => void;
+  stagedPrepObject?: ElectroObject | null;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -73,6 +74,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onResetScene,
   guidedElectroscopeMode = true,
   onToggleGuidedElectroscope,
+  stagedPrepObject = null,
 }) => {
   const selectedObject = objects.find((o) => o.id === selectedObjectId) || (moduleMode === 'module1' ? objects[0] : undefined);
   const selectedMat = selectedObject ? MATERIALS_DATABASE[selectedObject.materialId] : null;
@@ -735,7 +737,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   // Module 4: Gold-Leaf Electroscope Instrument Telemetry, Grounding, Specimen & Overlays
   if (moduleMode === 'module4') {
-    const guide = getElectroscopeGuideState(objects);
+    const guide = getElectroscopeGuideState(objects, stagedPrepObject);
     const scopeObj = objects.find((o) => o.shape === 'electroscope');
     const leafAngle = scopeObj?.leafAngleDeg ?? 0;
     const knobQ = scopeObj?.knobChargeNc ?? (scopeObj?.charge ?? 0) * 0.45;

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Sparkles, Check, Lock, X } from 'lucide-react';
 import {
   ElectroObject,
   VisualOverlayConfig,
@@ -46,6 +46,10 @@ interface SimulationCanvasProps {
   onToggleExpandStage?: () => void;
   guidedElectroscopeMode?: boolean;
   onToggleGuidedElectroscope?: () => void;
+  stagedPrepObject?: ElectroObject | null;
+  onRubStagedPrep?: () => void;
+  onPlaceStagedPrep?: () => void;
+  onCancelStagedPrep?: () => void;
 }
 
 export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
@@ -65,6 +69,10 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   onToggleExpandStage,
   guidedElectroscopeMode = true,
   onToggleGuidedElectroscope,
+  stagedPrepObject = null,
+  onRubStagedPrep,
+  onPlaceStagedPrep,
+  onCancelStagedPrep,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,6 +80,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   // Refs synced to latest props so the rAF loop runs smoothly at 60fps without teardown thrashing
   const moduleModeRef = useRef<ModuleMode>(moduleMode);
   const guidedElectroscopeModeRef = useRef<boolean>(guidedElectroscopeMode);
+  const stagedPrepObjectRef = useRef<ElectroObject | null>(stagedPrepObject);
   const objectsRef = useRef<ElectroObject[]>(objects);
   const overlayConfigRef = useRef<VisualOverlayConfig>(overlayConfig);
   const sensorRef = useRef<ProbeSensor>(sensor);
@@ -86,6 +95,9 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   useEffect(() => {
     guidedElectroscopeModeRef.current = guidedElectroscopeMode;
   }, [guidedElectroscopeMode]);
+  useEffect(() => {
+    stagedPrepObjectRef.current = stagedPrepObject;
+  }, [stagedPrepObject]);
 
   useEffect(() => {
     const prevById = new Map(objectsRef.current.map((o) => [o.id, o]));
@@ -145,6 +157,13 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   });
 
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 900, height: 600 });
+  const [isPrepRubbing, setIsPrepRubbing] = useState(false);
+
+  useEffect(() => {
+    if (!isPrepRubbing) return;
+    const t = setTimeout(() => setIsPrepRubbing(false), 450);
+    return () => clearTimeout(t);
+  }, [isPrepRubbing]);
 
   // Handle Resize via ResizeObserver so expanding/collapsing sidebars resizes the canvas immediately
   useEffect(() => {
@@ -1443,7 +1462,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
       // 13A. Guided Mode Step 3 Highlight Ring around Electroscope Brass Knob
       if (moduleModeRef.current === 'module4' && guidedElectroscopeModeRef.current) {
-        const guide = getElectroscopeGuideState(currentObjects);
+        const guide = getElectroscopeGuideState(currentObjects, stagedPrepObjectRef.current);
         if (guide.step === 3) {
           const scope = currentObjects.find((o) => o.shape === 'electroscope');
           if (scope) {
@@ -2250,9 +2269,143 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         )}
       </div>
 
+      {/* Module 4 Prep Station: Require Rubbing Object Before Placing on Stage */}
+      {moduleMode === 'module4' && stagedPrepObject && (() => {
+        const mat = MATERIALS_DATABASE[stagedPrepObject.materialId];
+        const isGround = stagedPrepObject.materialId === 'ground';
+        const isCharged = Math.abs(stagedPrepObject.charge) >= 0.5;
+        const canPlace = isGround || isCharged;
+        const chargePct = Math.min(100, (Math.abs(stagedPrepObject.charge) / 25) * 100);
+        const gainsElectrons = (mat?.triboOrder ?? 0) < 0;
+
+        return (
+          <div className="absolute left-3 top-14 z-20 w-[min(264px,calc(100%-24px))] bg-slate-900/95 backdrop-blur-md border-2 border-amber-400 rounded-2xl p-3 shadow-[0_0_32px_rgba(251,191,36,0.24)] space-y-2.5">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[11px] font-extrabold uppercase tracking-wide shrink-0">
+                  Prep Station
+                </span>
+                <span className="text-xs font-bold text-amber-200 truncate">
+                  {canPlace ? 'Ready to Place!' : 'Rub First'}
+                </span>
+              </div>
+              {onCancelStagedPrep && (
+                <button
+                  onClick={onCancelStagedPrep}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                  title="Pick a different object"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Visual Specimen Preview + Animated Rub Sweep */}
+            <div className="relative rounded-xl bg-slate-950/90 border border-slate-800 p-2.5 overflow-hidden space-y-1.5">
+              {isPrepRubbing && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-400/25 to-transparent animate-pulse pointer-events-none" />
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-4 h-4 rounded-sm shrink-0 border border-white/25 transition-transform ${
+                      isPrepRubbing ? 'scale-125 rotate-6' : ''
+                    }`}
+                    style={{ backgroundColor: mat?.color || '#94a3b8' }}
+                  />
+                  <span className="text-sm font-bold text-slate-100 truncate">
+                    {stagedPrepObject.name}
+                  </span>
+                </div>
+                <span
+                  className={`text-sm font-mono font-extrabold tabular-nums shrink-0 ${
+                    stagedPrepObject.charge > 0.2
+                      ? 'text-cyan-300'
+                      : stagedPrepObject.charge < -0.2
+                      ? 'text-pink-300'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  {stagedPrepObject.charge > 0.05
+                    ? `+${stagedPrepObject.charge.toFixed(1)}`
+                    : stagedPrepObject.charge.toFixed(1)}{' '}
+                  nC
+                </span>
+              </div>
+
+              <div className="text-xs text-slate-300 leading-snug">
+                {isGround
+                  ? 'Earth Ground Plate is always at 0 V.'
+                  : gainsElectrons
+                  ? 'Rubbing with Wool/Fur adds negative electrons (−).'
+                  : 'Rubbing with PTFE Cloth removes electrons (+).'}
+              </div>
+
+              {!isGround && (
+                <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                  <div
+                    className={`h-full transition-all duration-200 ${
+                      stagedPrepObject.charge < 0
+                        ? 'bg-gradient-to-r from-pink-500 to-fuchsia-400'
+                        : stagedPrepObject.charge > 0
+                        ? 'bg-gradient-to-r from-sky-500 to-cyan-300'
+                        : 'bg-slate-700'
+                    }`}
+                    style={{ width: `${Math.max(4, chargePct)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Required Sequential Buttons: 1. Rub -> 2. Place */}
+            <div className="space-y-1.5">
+              {!isGround && (
+                <button
+                  onClick={() => {
+                    setIsPrepRubbing(true);
+                    onRubStagedPrep?.();
+                  }}
+                  className={`w-full py-2.5 px-3 rounded-xl font-extrabold text-[13px] flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                    !isCharged
+                      ? 'bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 shadow-lg ring-2 ring-amber-200 animate-pulse'
+                      : 'bg-amber-950/70 hover:bg-amber-900/70 border border-amber-400/70 text-amber-200'
+                  }`}
+                >
+                  <Sparkles className={`w-4 h-4 ${!isCharged ? 'fill-slate-950' : 'text-amber-300'}`} />
+                  <span>{isCharged ? '1. Rub Again (+More Charge)' : '1. Rub to Charge Object'}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => onPlaceStagedPrep?.()}
+                disabled={!canPlace}
+                className={`w-full py-2.5 px-3 rounded-xl border font-extrabold text-[13px] flex items-center justify-center gap-1.5 transition-all ${
+                  canPlace
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 shadow-lg active:scale-95'
+                    : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                {canPlace ? (
+                  <>
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{isGround ? 'Place Ground Plate →' : '2. Place on Stage →'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                    <span>2. Rub Above to Unlock Place</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Module 4 Step-by-Step Student Guide Banner (Bottom-Center, Never Covers Centered Electroscope) */}
       {moduleMode === 'module4' && guidedElectroscopeMode && (() => {
-        const guide = getElectroscopeGuideState(objects);
+        const guide = getElectroscopeGuideState(objects, stagedPrepObject);
         return (
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 w-[min(94%,620px)] bg-slate-900/92 backdrop-blur-md border border-amber-400/70 rounded-xl px-3.5 py-2 shadow-xl flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">

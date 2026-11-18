@@ -15,6 +15,7 @@ import {
   Pin,
   Minus,
   Gauge,
+  Lock,
 } from 'lucide-react';
 
 interface ObjectSelectorToolbarProps {
@@ -34,6 +35,10 @@ interface ObjectSelectorToolbarProps {
   onUpdatePointCharge?: (id: string, updates: Partial<ElectroObject>) => void;
   onLoadPointChargePreset?: (presetKey: string) => void;
   guidedElectroscopeMode?: boolean;
+  stagedPrepObject?: ElectroObject | null;
+  onRubStagedPrep?: () => void;
+  onPlaceStagedPrep?: () => void;
+  onCancelStagedPrep?: () => void;
 }
 
 export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
@@ -53,6 +58,10 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
   onUpdatePointCharge,
   onLoadPointChargePreset,
   guidedElectroscopeMode = true,
+  stagedPrepObject = null,
+  onRubStagedPrep,
+  onPlaceStagedPrep,
+  onCancelStagedPrep,
 }) => {
   const [activeCategory, setActiveCategory] = useState<'all' | 'positive' | 'negative' | 'neutral_dielectric' | 'conductors'>('all');
   const [frictionTargetId, setFrictionTargetId] = useState<string>('');
@@ -444,7 +453,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
 
   // Module 4: Electroscope Lab — Organized Top-to-Bottom by Student Workflow (Add -> Rub -> Quick Labs)
   if (moduleMode === 'module4') {
-    const guide = getElectroscopeGuideState(objects);
+    const guide = getElectroscopeGuideState(objects, stagedPrepObject);
     const rubbableObjects = objects.filter((o) => o.shape !== 'electroscope' && o.shape !== 'point_charge');
     const selectedRubbable = rubbableObjects.find((o) => o.id === selectedObjectId) || rubbableObjects[0];
     const rubPairCandidates = selectedRubbable ? rubbableObjects.filter((o) => o.id !== selectedRubbable.id) : [];
@@ -452,6 +461,10 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
       rubPairCandidates.find((o) => o.id === frictionTargetId) || rubPairCandidates[0];
     const highlightStep1 = guidedElectroscopeMode && guide.step === 1;
     const highlightStep2 = guidedElectroscopeMode && guide.step === 2;
+    const canPlaceStaged = Boolean(
+      stagedPrepObject &&
+        (stagedPrepObject.materialId === 'ground' || Math.abs(stagedPrepObject.charge) >= 0.5)
+    );
 
     return (
       <aside className="w-full lg:w-[266px] xl:w-[284px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0 overflow-hidden">
@@ -466,7 +479,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
           <div className="flex items-center justify-between gap-1.5 shrink-0">
             <span className={`flex items-center gap-1.5 text-[13px] font-bold ${highlightStep1 ? 'text-amber-300' : 'text-slate-100'}`}>
               <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>{guidedElectroscopeMode ? 'Step 1 · Add Object' : 'Add Objects'}</span>
+              <span>{guidedElectroscopeMode ? 'Step 1 · Pick Object' : 'Add Objects'}</span>
             </span>
             {highlightStep1 ? (
               <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[11px] font-extrabold uppercase tracking-wide shrink-0">
@@ -478,36 +491,41 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 content-start flex-1">
-            {specimenMaterials.map((mat) => (
-              <button
-                key={mat.id}
-                onClick={() => onAddObject(mat.id)}
-                className={`px-2 py-1.5 rounded-xl border text-left flex items-center justify-between gap-1.5 transition-all ${
-                  highlightStep1
-                    ? 'bg-slate-950/90 border-amber-400/45 hover:border-amber-300 hover:bg-amber-950/40'
-                    : 'bg-slate-950/75 border-slate-800/80 hover:border-amber-400/60 hover:bg-slate-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <div
-                    className="w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ backgroundColor: mat.color }}
-                  />
-                  <span className="text-[13px] font-semibold text-slate-100 truncate">{mat.name}</span>
-                </div>
-                <span
-                  className={`text-[11px] font-mono font-bold shrink-0 ${
-                    mat.triboOrder > 0 ? 'text-cyan-400' : mat.triboOrder < 0 ? 'text-pink-400' : 'text-slate-400'
+            {specimenMaterials.map((mat) => {
+              const isInPrep = stagedPrepObject?.materialId === mat.id;
+              return (
+                <button
+                  key={mat.id}
+                  onClick={() => onAddObject(mat.id)}
+                  className={`px-2 py-1.5 rounded-xl border text-left flex items-center justify-between gap-1.5 transition-all ${
+                    isInPrep
+                      ? 'bg-amber-950/75 border-amber-400 text-slate-100 shadow-sm'
+                      : highlightStep1
+                      ? 'bg-slate-950/90 border-amber-400/45 hover:border-amber-300 hover:bg-amber-950/40'
+                      : 'bg-slate-950/75 border-slate-800/80 hover:border-amber-400/60 hover:bg-slate-800/50'
                   }`}
                 >
-                  {mat.triboOrder > 0 ? '+' : mat.triboOrder < 0 ? '−' : 'C'}
-                </span>
-              </button>
-            ))}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div
+                      className="w-2.5 h-2.5 rounded-sm shrink-0"
+                      style={{ backgroundColor: mat.color }}
+                    />
+                    <span className="text-[13px] font-semibold text-slate-100 truncate">{mat.name}</span>
+                  </div>
+                  <span
+                    className={`text-[11px] font-mono font-bold shrink-0 ${
+                      mat.triboOrder > 0 ? 'text-cyan-400' : mat.triboOrder < 0 ? 'text-pink-400' : 'text-slate-400'
+                    }`}
+                  >
+                    {mat.triboOrder > 0 ? '+' : mat.triboOrder < 0 ? '−' : 'C'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Step 2: Bench Test Objects & Charge / Rub */}
+        {/* Step 2: Prep Station / Bench Test Objects & Charge / Rub */}
         <div
           className={`rounded-xl p-2 border transition-all space-y-1.5 shrink-0 ${
             highlightStep2
@@ -519,20 +537,87 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
             <span className={`flex items-center gap-1.5 text-[13px] font-bold ${highlightStep2 ? 'text-amber-300' : 'text-slate-100'}`}>
               <Layers className="w-4 h-4 text-amber-400 shrink-0" />
               <span>
-                {guidedElectroscopeMode ? 'Step 2 · Charge Object' : `Bench Objects (${rubbableObjects.length})`}
+                {stagedPrepObject
+                  ? 'Step 2 · Rub & Place'
+                  : guidedElectroscopeMode
+                  ? 'Step 2 · Charge Object'
+                  : `Bench Objects (${rubbableObjects.length})`}
               </span>
             </span>
             {highlightStep2 && (
               <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[11px] font-extrabold uppercase tracking-wide shrink-0">
-                Click Rub
+                {stagedPrepObject ? (canPlaceStaged ? 'Click Place' : 'Rub First') : 'Click Rub'}
               </span>
             )}
           </div>
 
-          {rubbableObjects.length === 0 ? (
-            <div className="px-2.5 py-2 rounded-lg bg-slate-950/70 border border-dashed border-slate-800 text-xs text-slate-300 text-center">
-              Electroscope centered. Add a material above to test!
+          {stagedPrepObject && (
+            <div className="p-2 rounded-xl bg-amber-950/40 border border-amber-400/70 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-bold text-slate-100 truncate">
+                  {stagedPrepObject.name}
+                </span>
+                <span
+                  className={`text-xs font-mono font-bold tabular-nums shrink-0 ${
+                    stagedPrepObject.charge > 0.1
+                      ? 'text-cyan-300'
+                      : stagedPrepObject.charge < -0.1
+                      ? 'text-pink-300'
+                      : 'text-slate-300'
+                  }`}
+                >
+                  {stagedPrepObject.charge > 0.05
+                    ? `+${stagedPrepObject.charge.toFixed(1)}`
+                    : stagedPrepObject.charge.toFixed(1)}{' '}
+                  nC
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {stagedPrepObject.materialId !== 'ground' && (
+                  <button
+                    onClick={() => onRubStagedPrep?.()}
+                    className={`flex-1 py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1 ${
+                      !canPlaceStaged ? 'ring-2 ring-amber-200' : ''
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                    <span>1. Rub</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => onPlaceStagedPrep?.()}
+                  disabled={!canPlaceStaged}
+                  className={`flex-1 py-1.5 px-2 rounded-lg border font-bold text-xs flex items-center justify-center gap-1 ${
+                    canPlaceStaged
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300'
+                      : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {canPlaceStaged ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3 h-3 shrink-0" />}
+                  <span>2. Place</span>
+                </button>
+                {onCancelStagedPrep && (
+                  <button
+                    onClick={onCancelStagedPrep}
+                    className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-rose-400"
+                    title="Cancel prep"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
+          )}
+
+          {rubbableObjects.length === 0 ? (
+            !stagedPrepObject && (
+              <div className="px-2.5 py-2 rounded-lg bg-slate-950/70 border border-dashed border-slate-800 text-xs text-slate-300 text-center">
+                {guidedElectroscopeMode
+                  ? 'Pick a material above to rub & place!'
+                  : 'Electroscope centered. Add a material above!'}
+              </div>
+            )
           ) : (
             <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5">
               {rubbableObjects.map((obj) => {
@@ -577,7 +662,7 @@ export const ObjectSelectorToolbar: React.FC<ObjectSelectorToolbarProps> = ({
                           onSingleRub(obj.id);
                         }}
                         className={`px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs flex items-center gap-1 ${
-                          highlightStep2 ? 'ring-2 ring-amber-200' : ''
+                          highlightStep2 && !stagedPrepObject ? 'ring-2 ring-amber-200' : ''
                         }`}
                         title="Rub with exciter cloth"
                       >
