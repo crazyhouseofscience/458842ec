@@ -8,6 +8,7 @@ import {
   ContactMigrationEvent,
 } from '../types/electrostatics';
 import { MATERIALS_DATABASE } from './materialsData';
+import { getElectroscopeFoilSpec } from './electroscopeFoils';
 
 // Exact SI Physical Constants (CODATA 2022 / NIST)
 // Tabletop bench scale: 600 pixels = 1 meter (1 pixel ≈ 1.67 mm; 180 px rod ≈ 30 cm)
@@ -560,7 +561,9 @@ export function processConductionAndGrounding(
     for (const obj of objects) {
       if (obj.shape === 'point_charge') continue;
       if (Math.abs(obj.charge) > 0.01 && obj.materialId !== 'ground') {
-        obj.charge *= (1 - decayRate * stepDt * 60);
+        const foilLeakMultiplier =
+          obj.shape === 'electroscope' && obj.foilType === 'gum_wrapper' ? 2.2 : 1.0;
+        obj.charge *= (1 - decayRate * foilLeakMultiplier * stepDt * 60);
         updateSurfaceChargeDots(obj);
       }
     }
@@ -620,7 +623,14 @@ export function processConductionAndGrounding(
       const vB = computeObjectPotentialV(objB);
       const deltaV = vB - vA; // > 0 means B has higher potential, so e- flow A -> B
       const absDeltaV = Math.abs(deltaV);
-      const deltaW = matB.workFunctionEv - matA.workFunctionEv;
+      const foilSpecA = isScopeA ? getElectroscopeFoilSpec(objA.foilType) : null;
+      const foilSpecB = isScopeB ? getElectroscopeFoilSpec(objB.foilType) : null;
+      const effWorkFunctionA = foilSpecA ? foilSpecA.workFunctionEv : matA.workFunctionEv;
+      const effWorkFunctionB = foilSpecB ? foilSpecB.workFunctionEv : matB.workFunctionEv;
+      const foilTransmission =
+        (foilSpecA ? foilSpecA.oxideTransmission : 1.0) *
+        (foilSpecB ? foilSpecB.oxideTransmission : 1.0);
+      const deltaW = effWorkFunctionB - effWorkFunctionA;
       const absDeltaW = Math.abs(deltaW);
 
       const pairKey = [objA.id, objB.id].sort().join('::');
@@ -677,7 +687,7 @@ export function processConductionAndGrounding(
         const qDiff = qEqA - objA.charge;
 
         if (absDeltaV > 10 && Math.abs(qDiff) > 0.03) {
-          const rate = 3.4;
+          const rate = 3.4 * foilTransmission;
           const dqSigned = qDiff * (1 - Math.exp(-rate * stepDt));
           if (Math.abs(dqSigned) > 0.0004) {
             objA.charge += dqSigned;
@@ -697,7 +707,7 @@ export function processConductionAndGrounding(
         const qEqA = (objA.charge + objB.charge) * (cA / (cA + cB));
         const qDiff = qEqA - objA.charge;
         if (Math.abs(qDiff) > 0.05) {
-          const rate = isElectroscopeKnobTouch ? 2.1 : 0.72;
+          const rate = (isElectroscopeKnobTouch ? 2.1 : 0.72) * foilTransmission;
           const dqSigned = qDiff * (1 - Math.exp(-rate * stepDt));
           if (Math.abs(dqSigned) > 0.0003) {
             objA.charge += dqSigned;
@@ -1055,6 +1065,7 @@ export function updateElectroscopePhysics(objects: ElectroObject[], dt: number) 
 
   for (const scope of objects) {
     if (scope.shape !== 'electroscope') continue;
+    const foil = getElectroscopeFoilSpec(scope.foilType);
     const others = objects.filter((o) => o.id !== scope.id);
     const { knobX, knobY, leavesX, leavesY } = getElectroscopeTerminals(scope);
 
@@ -1065,13 +1076,13 @@ export function updateElectroscopePhysics(objects: ElectroObject[], dt: number) 
       // Grounding holds the conductor at V = 0: Q_scope -> -C_scope * V_ext(knob)
       // Leaves are connected to Earth (0 V) so leaf charge collapses while opposite charge collects on the knob!
       const qTarget = Math.max(-scope.capacityNc, Math.min(scope.capacityNc, -cScopeNcPerV * vKnob));
-      scope.charge += (qTarget - scope.charge) * (1 - Math.exp(-8.5 * stepDt));
+      scope.charge += (qTarget - scope.charge) * (1 - Math.exp(-8.5 * foil.oxideTransmission * stepDt));
       scope.leafChargeNc = (scope.leafChargeNc ?? 0) * Math.exp(-10 * stepDt);
       scope.knobChargeNc = scope.charge;
     } else {
       // Isolated electroscope: potential gradient (V_knob - V_leaves) drives electrons between knob and leaves!
       // Example: (-) rod near knob -> V_knob < V_leaves -> qIndLeaves < 0 (leaves become -, knob becomes +)
-      const qIndLeaves = cPolarNcPerV * (vKnob - vLeaves);
+      const qIndLeaves = cPolarNcPerV * (vKnob - vLeaves) * (0.94 + 0.06 * foil.oxideTransmission);
       const rawLeafQ = 0.58 * scope.charge + qIndLeaves;
       const rawKnobQ = 0.42 * scope.charge - qIndLeaves;
       scope.leafChargeNc = rawLeafQ;
@@ -1079,13 +1090,14 @@ export function updateElectroscopePhysics(objects: ElectroObject[], dt: number) 
     }
 
     const absLeafQ = Math.abs(scope.leafChargeNc ?? 0);
-    // Electrostatic torque vs gravitational restoring torque: smooth saturation up to 68 degrees half-angle
-    const targetAngleDeg = absLeafQ < 0.12 ? 0 : Math.min(68, 68 * (absLeafQ / (absLeafQ + 5.2)));
+    // Electrostatic torque vs gravitational restoring torque (governed by foil areal mass = density * thickness)
+    const targetAngleDeg =
+      absLeafQ < 0.12 ? 0 : Math.min(68, 68 * (absLeafQ / (absLeafQ + foil.halfAngleChargeNc)));
 
     const currentAngle = scope.leafAngleDeg ?? 0;
     const currentVel = scope.leafAngularVel ?? 0;
-    const stiffness = 135;
-    const damping = 13.5;
+    const stiffness = foil.stiffness;
+    const damping = foil.damping;
 
     const angularAcc = stiffness * (targetAngleDeg - currentAngle) - damping * currentVel;
     let nextVel = currentVel + angularAcc * stepDt;

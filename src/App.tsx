@@ -5,8 +5,10 @@ import {
   ProbeSensor,
   ProbeData,
   ModuleMode,
+  ElectroscopeFoilId,
 } from './types/electrostatics';
 import { INITIAL_PRESET_OBJECTS, MATERIALS_DATABASE } from './physics/materialsData';
+import { ELECTROSCOPE_FOIL_LIST, getElectroscopeFoilSpec } from './physics/electroscopeFoils';
 import { updateSurfaceChargeDots, rubSingleObjectWithLabCloth } from './physics/electrostaticsEngine';
 
 import { TopBar } from './components/TopBar';
@@ -19,6 +21,7 @@ import { QuizPanel } from './components/QuizPanel';
 import { MaterialChemistryModal } from './components/MaterialChemistryModal';
 import { AIAssistantModal } from './components/AIAssistantModal';
 import { StartupScreen } from './components/StartupScreen';
+import { PhysicsTooltip } from './components/PhysicsTooltip';
 import { getElectroscopeGuideState } from './utils/electroscopeGuide';
 
 import { Zap, Sparkles, Plus, Minus, Play, Pause, RotateCcw, Grid3x3, Shield, Compass, Check, Lock } from 'lucide-react';
@@ -121,10 +124,24 @@ function createPointChargeObject(
   };
 }
 
-function createElectroscopeObject(x = 530, y = 265, chargeNc = 0): ElectroObject {
+function createElectroscopeObject(
+  x = 530,
+  y = 265,
+  chargeNc = 0,
+  foilType: ElectroscopeFoilId = 'gold'
+): ElectroObject {
+  const foil = getElectroscopeFoilSpec(foilType);
+  const scopeName =
+    foil.id === 'gold'
+      ? 'Gold-Leaf Electroscope'
+      : foil.id === 'aluminum'
+      ? 'Aluminum-Foil Electroscope'
+      : foil.id === 'copper'
+      ? 'Copper-Foil Electroscope'
+      : 'Gum-Wrapper Electroscope';
   return {
     id: `scope-${Date.now()}`,
-    name: 'Gold-Leaf Electroscope',
+    name: scopeName,
     materialId: 'electroscope',
     shape: 'electroscope',
     x,
@@ -140,6 +157,7 @@ function createElectroscopeObject(x = 530, y = 265, chargeNc = 0): ElectroObject
     capacityNc: 30,
     surfaceCharges: [],
     dipoles: [],
+    foilType: foil.id,
     leafAngleDeg: 0,
     leafAngularVel: 0,
     leafChargeNc: chargeNc * 0.58,
@@ -1037,33 +1055,60 @@ export default function App() {
         'Practical App — Xerographic Toner Transfer: Negatively charged polymer toner beads drift across the air gap toward the +19 nC imaging drum.'
       );
     } else if (scenarioKey === 'scope_ruler_wool') {
-      const scope = createElectroscopeObject(530, 265, 0);
+      const activeFoil = objects.find((o) => o.shape === 'electroscope')?.foilType ?? 'gold';
+      const scope = createElectroscopeObject(530, 265, 0, activeFoil);
       const ruler = createSpecimenObject('plastic_ruler', 220, 190, 0, false);
       const wool = createSpecimenObject('wool', 220, 325, 0, false);
       setObjects([scope, ruler, wool]);
       setSelectedObjectId(ruler.id);
       setFrictionLog('Loaded Ruler + Wool Lab: Rub them together to charge the ruler (−), then approach or touch the brass knob!');
     } else if (scenarioKey === 'scope_glass_silk') {
-      const scope = createElectroscopeObject(530, 265, 0);
+      const activeFoil = objects.find((o) => o.shape === 'electroscope')?.foilType ?? 'gold';
+      const scope = createElectroscopeObject(530, 265, 0, activeFoil);
       const glass = createSpecimenObject('glass', 220, 190, 0, false);
       const silk = createSpecimenObject('silk', 220, 325, 0, false);
       setObjects([scope, glass, silk]);
       setSelectedObjectId(glass.id);
       setFrictionLog('Loaded Glass + Silk Lab: Rub them together to charge the Glass Rod (+), then test induction & conduction!');
     } else if (scenarioKey === 'scope_induction_demo') {
-      const scope = createElectroscopeObject(530, 265, 0);
+      const activeFoil = objects.find((o) => o.shape === 'electroscope')?.foilType ?? 'gold';
+      const scope = createElectroscopeObject(530, 265, 0, activeFoil);
       const balloon = createSpecimenObject('teflon', 340, 145, -16.0, false);
       setObjects([scope, balloon]);
       setSelectedObjectId(balloon.id);
       setFrictionLog('Induction Lab: Leaves diverge while (−) balloon is near knob! Click "Ground Knob", unground, then drag balloon away to trap permanent (+) charge!');
     } else if (scenarioKey === 'scope_charged_test') {
-      const scope = createElectroscopeObject(530, 265, -12.0);
+      const activeFoil = objects.find((o) => o.shape === 'electroscope')?.foilType ?? 'gold';
+      const scope = createElectroscopeObject(530, 265, -12.0, activeFoil);
       const ruler = createSpecimenObject('plastic_ruler', 210, 175, -12.0, false);
       const glass = createSpecimenObject('glass', 210, 315, 12.0, false);
       setObjects([scope, ruler, glass]);
       setSelectedObjectId(ruler.id);
       setFrictionLog('Polarity Test: Scope is (−12 nC). Bring (−) Ruler near knob to spread leaves wider, or (+) Glass Rod to drop them!');
     }
+  };
+
+  // Switch electroscope leaf foil material (Gold Au, Aluminum Al, Copper Cu, Gum Wrapper)
+  const handleChangeElectroscopeFoil = (foilId: ElectroscopeFoilId) => {
+    const foil = getElectroscopeFoilSpec(foilId);
+    const scopeName =
+      foil.id === 'gold'
+        ? 'Gold-Leaf Electroscope'
+        : foil.id === 'aluminum'
+        ? 'Aluminum-Foil Electroscope'
+        : foil.id === 'copper'
+        ? 'Copper-Foil Electroscope'
+        : 'Gum-Wrapper Electroscope';
+    setObjects((prev) =>
+      prev.map((o) =>
+        o.shape === 'electroscope'
+          ? { ...o, foilType: foil.id, name: scopeName }
+          : o
+      )
+    );
+    setFrictionLog(
+      `Installed ${foil.name} (${foil.chemicalFormula}, W=${foil.workFunctionEv.toFixed(2)} eV, σ=${foil.arealMassMgCm2.toFixed(2)} mg/cm²): ${foil.physicsSummary}`
+    );
   };
 
   // Programmatic Friction trigger from toolbar
@@ -1115,7 +1160,8 @@ export default function App() {
       setOverlayConfig((prev) => ({ ...prev, liveCoulombMotion: false }));
       setFrictionLog('Point Charges stage cleared. Add a + or − charge to inspect field lines and vectors.');
     } else if (moduleMode === 'module4') {
-      const scope = createElectroscopeObject(380, 260, 0);
+      const activeFoil = objects.find((o) => o.shape === 'electroscope')?.foilType ?? 'gold';
+      const scope = createElectroscopeObject(380, 260, 0, activeFoil);
       setObjects([scope]);
       setSelectedObjectId(null);
       setStagedPrepObject(null);
@@ -1191,46 +1237,54 @@ export default function App() {
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Segmented Module Switcher */}
           <div className="flex items-center gap-1 p-0.5 bg-slate-950 rounded-lg border border-slate-800 shrink-0">
-            <button
-              onClick={() => handleSwitchModule('module1')}
-              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
-                moduleMode === 'module1'
-                  ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              Module 1: Two Objects
-            </button>
-            <button
-              onClick={() => handleSwitchModule('module2')}
-              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
-                moduleMode === 'module2'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              Module 2: Multi-Object
-            </button>
-            <button
-              onClick={() => handleSwitchModule('module3')}
-              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
-                moduleMode === 'module3'
-                  ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              Module 3: Point Charges
-            </button>
-            <button
-              onClick={() => handleSwitchModule('module4')}
-              className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
-                moduleMode === 'module4'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-              }`}
-            >
-              Module 4: Electroscope
-            </button>
+            <PhysicsTooltip termKey="mod1Tab" placement="bottom">
+              <button
+                onClick={() => handleSwitchModule('module1')}
+                className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  moduleMode === 'module1'
+                    ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40 shadow-sm'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                Module 1: Two Objects
+              </button>
+            </PhysicsTooltip>
+            <PhysicsTooltip termKey="mod2Tab" placement="bottom">
+              <button
+                onClick={() => handleSwitchModule('module2')}
+                className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  moduleMode === 'module2'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                Module 2: Multi-Object
+              </button>
+            </PhysicsTooltip>
+            <PhysicsTooltip termKey="mod3Tab" placement="bottom">
+              <button
+                onClick={() => handleSwitchModule('module3')}
+                className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  moduleMode === 'module3'
+                    ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-sm'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                Module 3: Point Charges
+              </button>
+            </PhysicsTooltip>
+            <PhysicsTooltip termKey="mod4Tab" placement="bottom">
+              <button
+                onClick={() => handleSwitchModule('module4')}
+                className={`px-2.5 py-1 rounded-md text-xs lg:text-[13px] font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  moduleMode === 'module4'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                    : 'text-slate-200 hover:text-white'
+                }`}
+              >
+                Module 4: Electroscope
+              </button>
+            </PhysicsTooltip>
           </div>
 
           <span className="text-slate-600 hidden xl:inline">·</span>
@@ -1269,8 +1323,10 @@ export default function App() {
           <div className="hidden sm:flex items-center gap-3 font-mono text-xs lg:text-[13px] text-slate-200 tabular-nums">
             {(() => {
               const scope = objects.find((o) => o.shape === 'electroscope');
+              const foil = getElectroscopeFoilSpec(scope?.foilType);
               return (
                 <>
+                  <div>Foil: <span className="text-slate-100 font-bold">{foil.shortName} ({foil.symbol})</span></div>
                   <div>Leaf θ: <span className="text-amber-300 font-bold">{(scope?.leafAngleDeg ?? 0).toFixed(1)}°</span></div>
                   <div>Scope Q: <span className="text-cyan-300 font-bold">{(scope?.charge ?? 0) > 0.05 ? `+${(scope?.charge ?? 0).toFixed(1)}` : (scope?.charge ?? 0).toFixed(1)} nC</span></div>
                 </>
@@ -1332,41 +1388,51 @@ export default function App() {
                         <span className="text-xs font-bold uppercase tracking-wider text-orange-400 mr-1 whitespace-nowrap">
                           Step 3 · Rub to Charge
                         </span>
-                        <button
-                          onClick={() => handleSingleRub(slot0Obj.id)}
-                          className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
-                          <span>Rub Object 1</span>
-                        </button>
-                        <button
-                          onClick={() => handleSingleRub(slot1Obj.id)}
-                          className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
-                          <span>Rub Object 2</span>
-                        </button>
-                        <button
-                          onClick={() => handleTriggerFriction(slot0Obj.id, slot1Obj.id)}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-orange-400/60 text-orange-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
-                        >
-                          Rub 1 &amp; 2 Together
-                        </button>
+                        <PhysicsTooltip termKey="rubSingle" placement="bottom">
+                          <button
+                            onClick={() => handleSingleRub(slot0Obj.id)}
+                            className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                            <span>Rub Object 1</span>
+                          </button>
+                        </PhysicsTooltip>
+                        <PhysicsTooltip termKey="rubSingle" placement="bottom">
+                          <button
+                            onClick={() => handleSingleRub(slot1Obj.id)}
+                            className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                            <span>Rub Object 2</span>
+                          </button>
+                        </PhysicsTooltip>
+                        <PhysicsTooltip termKey="rubPair" placement="bottom">
+                          <button
+                            onClick={() => handleTriggerFriction(slot0Obj.id, slot1Obj.id)}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-orange-400/60 text-orange-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          >
+                            Rub 1 &amp; 2 Together
+                          </button>
+                        </PhysicsTooltip>
                       </div>
 
                       <div className="flex items-center gap-1.5 font-mono text-xs">
-                        <button
-                          onClick={() => handleSetPairPolarity('neutral')}
-                          className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-200 font-semibold whitespace-nowrap shrink-0"
-                        >
-                          Discharge (0)
-                        </button>
-                        <button
-                          onClick={handleResetScene}
-                          className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-300 font-semibold whitespace-nowrap shrink-0"
-                        >
-                          Clear Stage
-                        </button>
+                        <PhysicsTooltip termKey="dischargeZero" placement="bottom">
+                          <button
+                            onClick={() => handleSetPairPolarity('neutral')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-200 font-semibold whitespace-nowrap shrink-0"
+                          >
+                            Discharge (0)
+                          </button>
+                        </PhysicsTooltip>
+                        <PhysicsTooltip termKey="resetScene" placement="bottom">
+                          <button
+                            onClick={handleResetScene}
+                            className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-300 font-semibold whitespace-nowrap shrink-0"
+                          >
+                            Clear Stage
+                          </button>
+                        </PhysicsTooltip>
                       </div>
                     </>
                   ) : (
@@ -1381,18 +1447,22 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                        <button
-                          onClick={() => handleLoadRepelPair('scotch_tape')}
-                          className="px-2.5 py-1 bg-sky-950/60 border border-sky-500/40 hover:bg-sky-900/60 text-sky-200 font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
-                        >
-                          2× Scotch Tape (Repel)
-                        </button>
-                        <button
-                          onClick={() => handleLoadRepelPair('styrofoam')}
-                          className="px-2.5 py-1 bg-slate-800/80 border border-slate-600/60 hover:bg-slate-700/80 text-slate-100 font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
-                        >
-                          2× Styrofoam (Repel)
-                        </button>
+                        <PhysicsTooltip termKey="presetTapeRepel" placement="bottom">
+                          <button
+                            onClick={() => handleLoadRepelPair('scotch_tape')}
+                            className="px-2.5 py-1 bg-sky-950/60 border border-sky-500/40 hover:bg-sky-900/60 text-sky-200 font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          >
+                            2× Scotch Tape (Repel)
+                          </button>
+                        </PhysicsTooltip>
+                        <PhysicsTooltip termKey="presetStyrofoamRepel" placement="bottom">
+                          <button
+                            onClick={() => handleLoadRepelPair('styrofoam')}
+                            className="px-2.5 py-1 bg-slate-800/80 border border-slate-600/60 hover:bg-slate-700/80 text-slate-100 font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
+                          >
+                            2× Styrofoam (Repel)
+                          </button>
+                        </PhysicsTooltip>
                       </div>
                     </>
                   )}
@@ -1402,74 +1472,83 @@ export default function App() {
               {moduleMode === 'module3' && (
                 <div className="rounded-xl px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[13px] shrink-0 border bg-slate-900/95 border-slate-800">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      onClick={() => handleAddPointCharge(10)}
-                      className="px-2.5 py-1 rounded-lg bg-cyan-950/75 border border-cyan-500/60 hover:bg-cyan-900/75 text-cyan-100 font-bold text-xs flex items-center gap-1 whitespace-nowrap shrink-0 transition-all active:scale-95"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add +10 nC</span>
-                    </button>
-                    <button
-                      onClick={() => handleAddPointCharge(-10)}
-                      className="px-2.5 py-1 rounded-lg bg-pink-950/75 border border-pink-500/60 hover:bg-pink-900/75 text-pink-100 font-bold text-xs flex items-center gap-1 whitespace-nowrap shrink-0 transition-all active:scale-95"
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                      <span>Add −10 nC</span>
-                    </button>
+                    <PhysicsTooltip termKey="pointChargeAdd" placement="bottom">
+                      <button
+                        onClick={() => handleAddPointCharge(10)}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-950/75 border border-cyan-500/60 hover:bg-cyan-900/75 text-cyan-100 font-bold text-xs flex items-center gap-1 whitespace-nowrap shrink-0 transition-all active:scale-95"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add +10 nC</span>
+                      </button>
+                    </PhysicsTooltip>
+                    <PhysicsTooltip termKey="pointChargeAdd" placement="bottom">
+                      <button
+                        onClick={() => handleAddPointCharge(-10)}
+                        className="px-2.5 py-1 rounded-lg bg-pink-950/75 border border-pink-500/60 hover:bg-pink-900/75 text-pink-100 font-bold text-xs flex items-center gap-1 whitespace-nowrap shrink-0 transition-all active:scale-95"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                        <span>Add −10 nC</span>
+                      </button>
+                    </PhysicsTooltip>
 
-                    <button
-                      onClick={() =>
-                        setOverlayConfig((prev) => ({
-                          ...prev,
-                          liveCoulombMotion: !prev.liveCoulombMotion,
-                        }))
-                      }
-                      className={`px-3 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all active:scale-95 ${
-                        overlayConfig.liveCoulombMotion
-                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-sm'
-                          : 'bg-slate-950 hover:border-emerald-400/70 text-emerald-300 border-emerald-500/40'
-                      }`}
-                    >
-                      {overlayConfig.liveCoulombMotion ? (
-                        <>
-                          <Pause className="w-3.5 h-3.5" />
-                          <span>Animate &amp; Move: ON</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5" />
-                          <span>Animate &amp; Move: OFF</span>
-                        </>
-                      )}
-                    </button>
+                    <PhysicsTooltip termKey="liveMotion" placement="bottom">
+                      <button
+                        onClick={() =>
+                          setOverlayConfig((prev) => ({
+                            ...prev,
+                            liveCoulombMotion: !prev.liveCoulombMotion,
+                          }))
+                        }
+                        className={`px-3 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all active:scale-95 ${
+                          overlayConfig.liveCoulombMotion
+                            ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-sm'
+                            : 'bg-slate-950 hover:border-emerald-400/70 text-emerald-300 border-emerald-500/40'
+                        }`}
+                      >
+                        {overlayConfig.liveCoulombMotion ? (
+                          <>
+                            <Pause className="w-3.5 h-3.5" />
+                            <span>Animate &amp; Move: ON</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5" />
+                            <span>Animate &amp; Move: OFF</span>
+                          </>
+                        )}
+                      </button>
+                    </PhysicsTooltip>
 
-                    <button
-                      onClick={() =>
-                        setOverlayConfig((prev) => ({
-                          ...prev,
-                          showFieldVectorGrid: !prev.showFieldVectorGrid,
-                        }))
-                      }
-                      className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all active:scale-95 ${
-                        overlayConfig.showFieldVectorGrid
-                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-sm'
-                          : 'bg-slate-950 hover:border-cyan-400/60 text-slate-300 border-slate-700'
-                      }`}
-                      title="Toggle background grid showing E-field vector direction and magnitude at every intersection"
-                    >
-                      <Grid3x3 className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Vector Grid: {overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
-                    </button>
+                    <PhysicsTooltip termKey="vectorGrid" placement="bottom">
+                      <button
+                        onClick={() =>
+                          setOverlayConfig((prev) => ({
+                            ...prev,
+                            showFieldVectorGrid: !prev.showFieldVectorGrid,
+                          }))
+                        }
+                        className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all active:scale-95 ${
+                          overlayConfig.showFieldVectorGrid
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-sm'
+                            : 'bg-slate-950 hover:border-cyan-400/60 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        <Grid3x3 className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Vector Grid: {overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
+                      </button>
+                    </PhysicsTooltip>
                   </div>
 
                   <div className="flex items-center gap-1.5 font-mono text-xs">
-                    <button
-                      onClick={handleResetScene}
-                      className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-200 font-semibold flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Reset / Clear</span>
-                    </button>
+                    <PhysicsTooltip termKey="resetScene" placement="bottom">
+                      <button
+                        onClick={handleResetScene}
+                        className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-200 font-semibold flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset / Clear</span>
+                      </button>
+                    </PhysicsTooltip>
                   </div>
                 </div>
               )}
@@ -1494,18 +1573,19 @@ export default function App() {
                 return (
                   <div className="rounded-xl px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs lg:text-[13px] shrink-0 border bg-slate-900/95 border-slate-800">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <button
-                        onClick={handleToggleGuidedElectroscope}
-                        className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
-                          guidedElectroscopeMode
-                            ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                            : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
-                        }`}
-                        title="Toggle step-by-step student guidance on or off"
-                      >
-                        <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>Guide: {guidedElectroscopeMode ? 'ON' : 'OFF'}</span>
-                      </button>
+                      <PhysicsTooltip termKey="guideToggle" placement="bottom">
+                        <button
+                          onClick={handleToggleGuidedElectroscope}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
+                            guidedElectroscopeMode
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                              : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
+                          }`}
+                        >
+                          <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>Guide: {guidedElectroscopeMode ? 'ON' : 'OFF'}</span>
+                        </button>
+                      </PhysicsTooltip>
 
                       {guidedElectroscopeMode && (
                         <span className="px-2 py-0.5 rounded-md bg-amber-950/60 border border-amber-500/40 text-amber-200 font-semibold text-xs whitespace-nowrap">
@@ -1516,101 +1596,153 @@ export default function App() {
                       {stagedPrepObject ? (
                         <>
                           {stagedPrepObject.materialId !== 'ground' && (
+                            <PhysicsTooltip termKey="rubSingle" placement="bottom">
+                              <button
+                                onClick={handleRubStagedPrep}
+                                className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                                  !canPlaceStaged ? 'ring-2 ring-amber-200 animate-pulse' : ''
+                                }`}
+                              >
+                                <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                                <span>1. Rub {stagedPrepObject.name}</span>
+                              </button>
+                            </PhysicsTooltip>
+                          )}
+                          <PhysicsTooltip termKey="placeStagedObject" placement="bottom">
                             <button
-                              onClick={handleRubStagedPrep}
-                              className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
-                                !canPlaceStaged ? 'ring-2 ring-amber-200 animate-pulse' : ''
+                              onClick={handlePlaceStagedPrep}
+                              disabled={!canPlaceStaged}
+                              className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
+                                canPlaceStaged
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-sm active:scale-95'
+                                  : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
                               }`}
                             >
-                              <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
-                              <span>1. Rub {stagedPrepObject.name}</span>
+                              {canPlaceStaged ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
+                              <span>2. Place on Stage</span>
                             </button>
-                          )}
-                          <button
-                            onClick={handlePlaceStagedPrep}
-                            disabled={!canPlaceStaged}
-                            className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
-                              canPlaceStaged
-                                ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-sm active:scale-95'
-                                : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
-                            }`}
-                          >
-                            {canPlaceStaged ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Lock className="w-3.5 h-3.5 shrink-0" />}
-                            <span>2. Place on Stage</span>
-                          </button>
+                          </PhysicsTooltip>
                         </>
                       ) : (
                         <>
                           {selectedRub && (
-                            <button
-                              onClick={() => handleSingleRub(selectedRub.id)}
-                              className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
-                                guidedElectroscopeMode && guide.step === 2
-                                  ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-slate-900'
-                                  : ''
-                              }`}
-                            >
-                              <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
-                              <span>Rub {selectedRub.name}</span>
-                            </button>
+                            <PhysicsTooltip termKey="rubSingle" placement="bottom">
+                              <button
+                                onClick={() => handleSingleRub(selectedRub.id)}
+                                className={`px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                                  guidedElectroscopeMode && guide.step === 2
+                                    ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-slate-900'
+                                    : ''
+                                }`}
+                              >
+                                <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                                <span>Rub {selectedRub.name}</span>
+                              </button>
+                            </PhysicsTooltip>
                           )}
 
                           {selectedRub && rubPartner && (
-                            <button
-                              onClick={() => handleTriggerFriction(selectedRub.id, rubPartner.id)}
-                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
-                            >
-                              Rub Pair Together
-                            </button>
+                            <PhysicsTooltip termKey="rubPair" placement="bottom">
+                              <button
+                                onClick={() => handleTriggerFriction(selectedRub.id, rubPartner.id)}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-amber-400/60 text-amber-200 font-semibold text-xs rounded-lg transition-colors whitespace-nowrap shrink-0"
+                              >
+                                Rub Pair Together
+                              </button>
+                            </PhysicsTooltip>
                           )}
                         </>
                       )}
 
                       {scope && (
-                        <button
-                          onClick={() =>
-                            setObjects((prev) =>
-                              prev.map((o) =>
-                                o.id === scope.id ? { ...o, isGrounded: !o.isGrounded } : o
+                        <div className="flex items-center gap-1 bg-amber-950/35 border border-amber-400/60 rounded-lg p-0.5 shrink-0">
+                          <span className="text-[11px] font-extrabold text-amber-300 px-1.5 whitespace-nowrap">
+                            Change Foil:
+                          </span>
+                          {ELECTROSCOPE_FOIL_LIST.map((foil) => {
+                            const isActive = (scope.foilType ?? 'gold') === foil.id;
+                            const tipKey =
+                              foil.id === 'gold'
+                                ? 'foilGold'
+                                : foil.id === 'aluminum'
+                                ? 'foilAluminum'
+                                : foil.id === 'copper'
+                                ? 'foilCopper'
+                                : 'foilGumWrapper';
+                            return (
+                              <PhysicsTooltip key={foil.id} termKey={tipKey} placement="bottom">
+                                <button
+                                  onClick={() => handleChangeElectroscopeFoil(foil.id)}
+                                  className={`px-2 py-0.5 rounded-md text-xs font-bold flex items-center gap-1 whitespace-nowrap transition-all ${
+                                    isActive
+                                      ? 'bg-slate-800 text-white border border-amber-400 shadow-sm'
+                                      : 'text-slate-200 hover:text-white hover:bg-slate-900 border border-transparent'
+                                  }`}
+                                >
+                                  <span
+                                    className="w-2 h-2 rounded-full shrink-0 border border-white/30"
+                                    style={{ backgroundColor: foil.swatchColor }}
+                                  />
+                                  <span>{foil.shortName}</span>
+                                  <span className="text-[10px] font-mono text-slate-400">({foil.baseTag})</span>
+                                </button>
+                              </PhysicsTooltip>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {scope && (
+                        <PhysicsTooltip termKey="groundObject" placement="bottom">
+                          <button
+                            onClick={() =>
+                              setObjects((prev) =>
+                                prev.map((o) =>
+                                  o.id === scope.id ? { ...o, isGrounded: !o.isGrounded } : o
+                                )
                               )
-                            )
-                          }
-                          className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
-                            scope.isGrounded
-                              ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                              : guidedElectroscopeMode && guide.step === 4
-                              ? 'bg-emerald-950/70 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/40'
-                              : 'bg-slate-950 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50'
-                          }`}
-                        >
-                          <Shield className="w-3.5 h-3.5" />
-                          <span>{scope.isGrounded ? 'Grounded (0 V)' : 'Ground Knob'}</span>
-                        </button>
+                            }
+                            className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
+                              scope.isGrounded
+                                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                                : guidedElectroscopeMode && guide.step === 4
+                                ? 'bg-emerald-950/70 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/40'
+                                : 'bg-slate-950 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50'
+                            }`}
+                          >
+                            <Shield className="w-3.5 h-3.5" />
+                            <span>{scope.isGrounded ? 'Grounded (0 V)' : 'Ground Knob'}</span>
+                          </button>
+                        </PhysicsTooltip>
                       )}
                     </div>
 
                     <div className="flex items-center gap-1.5 font-mono text-xs">
-                      <button
-                        onClick={() =>
-                          setObjects((prev) =>
-                            prev.map((o) =>
-                              o.shape === 'electroscope'
-                                ? { ...o, charge: 0, leafChargeNc: 0, knobChargeNc: 0, isGrounded: false }
-                                : o
+                      <PhysicsTooltip termKey="dischargeZero" placement="bottom">
+                        <button
+                          onClick={() =>
+                            setObjects((prev) =>
+                              prev.map((o) =>
+                                o.shape === 'electroscope'
+                                  ? { ...o, charge: 0, leafChargeNc: 0, knobChargeNc: 0, isGrounded: false }
+                                  : o
+                              )
                             )
-                          )
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-400/60 text-slate-200 font-semibold whitespace-nowrap shrink-0"
-                      >
-                        Discharge Scope
-                      </button>
-                      <button
-                        onClick={handleResetScene}
-                        className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-200 font-semibold flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Reset Bench</span>
-                      </button>
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-amber-400/60 text-slate-200 font-semibold whitespace-nowrap shrink-0"
+                        >
+                          Discharge Scope
+                        </button>
+                      </PhysicsTooltip>
+                      <PhysicsTooltip termKey="resetScene" placement="bottom">
+                        <button
+                          onClick={handleResetScene}
+                          className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-rose-500/50 hover:text-rose-300 text-slate-200 font-semibold flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Reset Bench</span>
+                        </button>
+                      </PhysicsTooltip>
                     </div>
                   </div>
                 );
@@ -1638,6 +1770,7 @@ export default function App() {
                   onRubStagedPrep={handleRubStagedPrep}
                   onPlaceStagedPrep={handlePlaceStagedPrep}
                   onCancelStagedPrep={handleCancelStagedPrep}
+                  onChangeElectroscopeFoil={handleChangeElectroscopeFoil}
                 />
               </div>
             </div>

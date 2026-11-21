@@ -7,7 +7,10 @@ import {
   ModuleMode,
 } from '../types/electrostatics';
 import { MATERIALS_DATABASE } from '../physics/materialsData';
+import { ELECTROSCOPE_FOIL_LIST, getElectroscopeFoilSpec } from '../physics/electroscopeFoils';
 import { getElectroscopeGuideState } from '../utils/electroscopeGuide';
+import { getMaterialTooltip } from '../utils/physicsGlossary';
+import { PhysicsTooltip } from './PhysicsTooltip';
 import {
   updateSurfaceChargeDots,
   getAirBreakdownThreshold,
@@ -197,40 +200,45 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
               {/* Direct Rub & Pin/Clear Actions (Manual Charge Q sliders live in Module 2) */}
               <div className="flex items-center gap-1.5 pt-0.5">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedObjectId(obj2.id);
-                    onSingleRub(obj2.id);
-                  }}
-                  className="flex-1 py-1.5 px-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1 whitespace-nowrap"
-                >
-                  <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
-                  <span>Rub Object 2</span>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateSlotObject(1, { isPinned: !obj2.isPinned, vx: 0, vy: 0 });
-                  }}
-                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap ${
-                    obj2.isPinned
-                      ? 'bg-orange-950/80 border-orange-400 text-orange-300'
-                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-slate-100'
-                  }`}
-                >
-                  {obj2.isPinned ? 'Pinned' : 'Pin'}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClearSlot(1);
-                  }}
-                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 transition-colors"
-                  title="Clear Object 2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <PhysicsTooltip termKey="rubSingle" placement="left" className="flex-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedObjectId(obj2.id);
+                      onSingleRub(obj2.id);
+                    }}
+                    className="w-full py-1.5 px-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1 whitespace-nowrap"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 fill-slate-950 shrink-0" />
+                    <span>Rub Object 2</span>
+                  </button>
+                </PhysicsTooltip>
+                <PhysicsTooltip termKey="pinObject" placement="left">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateSlotObject(1, { isPinned: !obj2.isPinned, vx: 0, vy: 0 });
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap ${
+                      obj2.isPinned
+                        ? 'bg-orange-950/80 border-orange-400 text-orange-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-slate-100'
+                    }`}
+                  >
+                    {obj2.isPinned ? 'Pinned' : 'Pin'}
+                  </button>
+                </PhysicsTooltip>
+                <PhysicsTooltip termKey="removeObject" placement="left">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClearSlot(1);
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </PhysicsTooltip>
               </div>
             </>
           ) : (
@@ -260,37 +268,38 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {materialList.map((mat) => {
               const isSelectedMat = obj2?.materialId === mat.id;
               return (
-                <button
-                  key={mat.id}
-                  onClick={() => onAssignSlotMaterial(1, mat.id)}
-                  className={`w-full px-2 py-1.5 rounded-xl border text-left flex items-start justify-between gap-1.5 transition-all ${
-                    isSelectedMat
-                      ? 'bg-orange-950/65 border-orange-400 text-slate-100 shadow-sm'
-                      : needsObj2Now
-                      ? 'bg-slate-950/85 border-orange-500/35 hover:border-orange-400 hover:bg-orange-950/30 text-slate-100'
-                      : 'bg-slate-950/75 border-slate-800/80 hover:border-slate-600 hover:bg-slate-800/50 text-slate-200'
-                  }`}
-                >
-                  <div className="flex items-start gap-1.5 min-w-0">
-                    <div
-                      className="w-2.5 h-2.5 rounded-sm shrink-0 mt-1"
-                      style={{ backgroundColor: mat.color }}
-                    />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-semibold leading-tight truncate">{mat.name}</div>
-                      <div className="text-xs text-slate-400 truncate font-mono mt-0.5">
-                        {mat.triboOrder > 0
-                          ? `+${mat.triboOrder} Donor`
-                          : mat.triboOrder < 0
-                          ? `${mat.triboOrder} Gain e⁻`
-                          : mat.category === 'conductor'
-                          ? 'Conductor'
-                          : 'Dielectric'}
+                <PhysicsTooltip key={mat.id} entry={getMaterialTooltip(mat)} placement="left">
+                  <button
+                    onClick={() => onAssignSlotMaterial(1, mat.id)}
+                    className={`w-full px-2 py-1.5 rounded-xl border text-left flex items-start justify-between gap-1.5 transition-all ${
+                      isSelectedMat
+                        ? 'bg-orange-950/65 border-orange-400 text-slate-100 shadow-sm'
+                        : needsObj2Now
+                        ? 'bg-slate-950/85 border-orange-500/35 hover:border-orange-400 hover:bg-orange-950/30 text-slate-100'
+                        : 'bg-slate-950/75 border-slate-800/80 hover:border-slate-600 hover:bg-slate-800/50 text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      <div
+                        className="w-2.5 h-2.5 rounded-sm shrink-0 mt-1"
+                        style={{ backgroundColor: mat.color }}
+                      />
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold leading-tight truncate">{mat.name}</div>
+                        <div className="text-xs text-slate-400 truncate font-mono mt-0.5">
+                          {mat.triboOrder > 0
+                            ? `+${mat.triboOrder} Donor`
+                            : mat.triboOrder < 0
+                            ? `${mat.triboOrder} Gain e⁻`
+                            : mat.category === 'conductor'
+                            ? 'Conductor'
+                            : 'Dielectric'}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {isSelectedMat && <Check className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />}
-                </button>
+                    {isSelectedMat && <Check className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />}
+                  </button>
+                </PhysicsTooltip>
               );
             })}
           </div>
@@ -302,91 +311,107 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
               Stage Options
             </span>
-            <button
-              onClick={onResetScene}
-              className="text-xs font-semibold text-slate-300 hover:text-rose-300 transition-colors"
-            >
-              Reset Pair
-            </button>
+            <PhysicsTooltip termKey="resetScene" placement="left">
+              <button
+                onClick={onResetScene}
+                className="text-xs font-semibold text-slate-300 hover:text-rose-300 transition-colors"
+              >
+                Reset Pair
+              </button>
+            </PhysicsTooltip>
           </div>
 
           <div className="grid grid-cols-2 gap-1.5 text-xs">
-            <button
-              onClick={() => toggleOverlay('liveCoulombMotion')}
-              className={`px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.liveCoulombMotion
-                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
-                  : 'bg-slate-950/50 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Motion</span>
-              <span className="font-mono font-bold">{overlayConfig.liveCoulombMotion ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="liveMotion" placement="left">
+              <button
+                onClick={() => toggleOverlay('liveCoulombMotion')}
+                className={`w-full px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.liveCoulombMotion
+                    ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Motion</span>
+                <span className="font-mono font-bold">{overlayConfig.liveCoulombMotion ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showForceVectors')}
-              className={`px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showForceVectors
-                  ? 'bg-rose-950/60 border-rose-500/50 text-rose-300'
-                  : 'bg-slate-950/50 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Force Arrows</span>
-              <span className="font-mono font-bold">{overlayConfig.showForceVectors ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="forceVectors" placement="left">
+              <button
+                onClick={() => toggleOverlay('showForceVectors')}
+                className={`w-full px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showForceVectors
+                    ? 'bg-rose-950/60 border-rose-500/50 text-rose-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Force Arrows</span>
+                <span className="font-mono font-bold">{overlayConfig.showForceVectors ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showCharges')}
-              className={`px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showCharges
-                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
-                  : 'bg-slate-950/50 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Charges</span>
-              <span className="font-mono font-bold">{overlayConfig.showCharges ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="chargesDots" placement="left">
+              <button
+                onClick={() => toggleOverlay('showCharges')}
+                className={`w-full px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showCharges
+                    ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Charges</span>
+                <span className="font-mono font-bold">{overlayConfig.showCharges ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldLines')}
-              className={`px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showFieldLines
-                  ? 'bg-sky-950/60 border-sky-500/50 text-sky-300'
-                  : 'bg-slate-950/50 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Field Lines</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="fieldLines" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldLines')}
+                className={`w-full px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldLines
+                    ? 'bg-sky-950/60 border-sky-500/50 text-sky-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Field Lines</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showChargeMagnitude')}
-              className={`px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showChargeMagnitude
-                  ? 'bg-orange-950/60 border-orange-400/70 text-orange-300'
-                  : 'bg-slate-950/50 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Labels (+/- nC)</span>
-              <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="chargeLabels" placement="left">
+              <button
+                onClick={() => toggleOverlay('showChargeMagnitude')}
+                className={`w-full px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showChargeMagnitude
+                    ? 'bg-orange-950/60 border-orange-400/70 text-orange-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Labels (+/- nC)</span>
+                <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldVectorGrid')}
-              className={`px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showFieldVectorGrid
-                  ? 'bg-cyan-950/60 border-cyan-400/70 text-cyan-300'
-                  : 'bg-slate-950/50 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Vector Grid</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="vectorGrid" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldVectorGrid')}
+                className={`w-full px-2 py-1 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldVectorGrid
+                    ? 'bg-cyan-950/60 border-cyan-400/70 text-cyan-300'
+                    : 'bg-slate-950/50 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Vector Grid</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
           </div>
 
           <div className="space-y-1 bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
             <div className="flex justify-between text-xs text-slate-200 font-mono tabular-nums">
-              <span>Coulomb Damping (γ)</span>
+              <PhysicsTooltip termKey="coulombDamping" placement="left" as="span" underlineTerm>
+                <span>Coulomb Damping (γ)</span>
+              </PhysicsTooltip>
               <span className="text-emerald-400 font-bold">{overlayConfig.coulombDamping.toFixed(2)}</span>
             </div>
             <input
@@ -420,12 +445,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             <Crosshair className="w-4 h-4 text-pink-400" />
             <h2 className="text-sm font-bold text-slate-100">Point Charge Inspector</h2>
           </div>
-          <button
-            onClick={onResetScene}
-            className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
-          >
-            Reset / Clear
-          </button>
+          <PhysicsTooltip termKey="resetScene" placement="left">
+            <button
+              onClick={onResetScene}
+              className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
+            >
+              Reset / Clear
+            </button>
+          </PhysicsTooltip>
         </div>
 
         {/* 1. Selected Point Charge Manipulation */}
@@ -447,19 +474,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </span>
                 </div>
               </div>
-              <button
-                onClick={handleDeleteSelected}
-                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/60 rounded-lg transition-colors shrink-0"
-                title="Remove selected point charge"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <PhysicsTooltip termKey="removeObject" placement="left">
+                <button
+                  onClick={handleDeleteSelected}
+                  className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/60 rounded-lg transition-colors shrink-0"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </PhysicsTooltip>
             </div>
 
             {/* Charge Magnitude Slider (-30 to +30 nC) */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-baseline text-xs font-mono tabular-nums">
-                <span className="text-slate-300 font-semibold">Charge Q</span>
+                <PhysicsTooltip termKey="netCharge" placement="left" as="span" underlineTerm>
+                  <span className="text-slate-300 font-semibold">Charge Q</span>
+                </PhysicsTooltip>
                 <span
                   className={`font-bold text-base ${
                     isPos ? 'text-cyan-400' : isNeg ? 'text-pink-400' : 'text-slate-300'
@@ -503,40 +533,46 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             </div>
 
             <div className="grid grid-cols-3 gap-1.5 text-xs">
-              <button
-                onClick={() => handleUpdateSelectedObject({ charge: -selectedObject.charge })}
-                className="px-2 py-1.5 bg-slate-900 border border-slate-800 hover:border-cyan-400/60 text-slate-200 rounded-xl font-semibold flex items-center gap-1 justify-center transition-colors whitespace-nowrap"
-                title="Invert charge polarity"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span>Flip ±</span>
-              </button>
+              <PhysicsTooltip termKey="flipPolarity" placement="left">
+                <button
+                  onClick={() => handleUpdateSelectedObject({ charge: -selectedObject.charge })}
+                  className="w-full px-2 py-1.5 bg-slate-900 border border-slate-800 hover:border-cyan-400/60 text-slate-200 rounded-xl font-semibold flex items-center gap-1 justify-center transition-colors whitespace-nowrap"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span>Flip ±</span>
+                </button>
+              </PhysicsTooltip>
 
-              <button
-                onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
-                className={`px-2 py-1.5 rounded-xl border font-semibold flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
-                  selectedObject.isPinned
-                    ? 'bg-amber-950/80 border-amber-400 text-amber-300'
-                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
-                }`}
-              >
-                <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>{selectedObject.isPinned ? 'Pinned' : 'Pin'}</span>
-              </button>
+              <PhysicsTooltip termKey="pinObject" placement="left">
+                <button
+                  onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
+                  className={`w-full px-2 py-1.5 rounded-xl border font-semibold flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
+                    selectedObject.isPinned
+                      ? 'bg-amber-950/80 border-amber-400 text-amber-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                  }`}
+                >
+                  <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>{selectedObject.isPinned ? 'Pinned' : 'Pin'}</span>
+                </button>
+              </PhysicsTooltip>
 
-              <button
-                onClick={() => handleUpdateSelectedObject({ vx: 0, vy: 0 })}
-                className="px-2 py-1.5 bg-slate-900 border border-slate-800 hover:border-rose-400/60 text-slate-200 rounded-xl font-semibold transition-colors whitespace-nowrap"
-                title="Zero velocity"
-              >
-                Stop v
-              </button>
+              <PhysicsTooltip termKey="stopVelocity" placement="left">
+                <button
+                  onClick={() => handleUpdateSelectedObject({ vx: 0, vy: 0 })}
+                  className="w-full px-2 py-1.5 bg-slate-900 border border-slate-800 hover:border-rose-400/60 text-slate-200 rounded-xl font-semibold transition-colors whitespace-nowrap"
+                >
+                  Stop v
+                </button>
+              </PhysicsTooltip>
             </div>
 
             {/* Live Force Readout for Selected Point Charge */}
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-xl p-2.5 space-y-1 text-xs font-mono tabular-nums">
               <div className="flex justify-between">
-                <span className="text-slate-400">Net Force |F|:</span>
+                <PhysicsTooltip termKey="coulombForce" placement="left" as="span" underlineTerm>
+                  <span className="text-slate-400">Net Force |F|:</span>
+                </PhysicsTooltip>
                 <span className="text-amber-300 font-bold">
                   {(selectedForce?.magnitude ?? 0).toFixed(2)} µN
                 </span>
@@ -570,126 +606,143 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </span>
 
           <div className="grid grid-cols-2 gap-1.5 text-xs">
-            <button
-              onClick={() => toggleOverlay('liveCoulombMotion')}
-              className={`col-span-2 px-2.5 py-2 rounded-xl border font-bold flex items-center justify-between transition-all ${
-                overlayConfig.liveCoulombMotion
-                  ? 'bg-emerald-950/75 border-emerald-400 text-emerald-200 shadow-sm'
-                  : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-emerald-400/60'
-              }`}
-            >
-              <span>Animate &amp; Move (Attract / Repel)</span>
-              <span className={`font-mono font-bold ${overlayConfig.liveCoulombMotion ? 'text-emerald-300' : 'text-slate-400'}`}>
-                {overlayConfig.liveCoulombMotion ? 'ON' : 'PAUSED'}
-              </span>
-            </button>
+            <PhysicsTooltip termKey="liveMotion" placement="left" className="col-span-2">
+              <button
+                onClick={() => toggleOverlay('liveCoulombMotion')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-bold flex items-center justify-between transition-all ${
+                  overlayConfig.liveCoulombMotion
+                    ? 'bg-emerald-950/75 border-emerald-400 text-emerald-200 shadow-sm'
+                    : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-emerald-400/60'
+                }`}
+              >
+                <span>Animate &amp; Move (Attract / Repel)</span>
+                <span className={`font-mono font-bold ${overlayConfig.liveCoulombMotion ? 'text-emerald-300' : 'text-slate-400'}`}>
+                  {overlayConfig.liveCoulombMotion ? 'ON' : 'PAUSED'}
+                </span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showForceVectors')}
-              className={`px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.showForceVectors
-                  ? 'bg-rose-950/60 border-rose-500/60 text-rose-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Force Arrows</span>
-              <span className="font-mono font-bold">{overlayConfig.showForceVectors ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="forceVectors" placement="left">
+              <button
+                onClick={() => toggleOverlay('showForceVectors')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.showForceVectors
+                    ? 'bg-rose-950/60 border-rose-500/60 text-rose-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Force Arrows</span>
+                <span className="font-mono font-bold">{overlayConfig.showForceVectors ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldVectors')}
-              className={`px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.showFieldVectors
-                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>E-Vectors</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldVectors ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="fieldVectors" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldVectors')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldVectors
+                    ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>E-Vectors</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldVectors ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldLines')}
-              className={`px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.showFieldLines
-                  ? 'bg-sky-950/60 border-sky-500/60 text-sky-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Field Lines</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="fieldLines" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldLines')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldLines
+                    ? 'bg-sky-950/60 border-sky-500/60 text-sky-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Field Lines</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('animateFieldFlow')}
-              className={`px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.animateFieldFlow
-                  ? 'bg-cyan-950/60 border-cyan-500/60 text-cyan-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Field Flow</span>
-              <span className="font-mono font-bold">{overlayConfig.animateFieldFlow ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="fieldFlow" placement="left">
+              <button
+                onClick={() => toggleOverlay('animateFieldFlow')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.animateFieldFlow
+                    ? 'bg-cyan-950/60 border-cyan-500/60 text-cyan-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Field Flow</span>
+                <span className="font-mono font-bold">{overlayConfig.animateFieldFlow ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showChargeMagnitude')}
-              className={`px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.showChargeMagnitude
-                  ? 'bg-orange-950/60 border-orange-400/70 text-orange-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Magnitude</span>
-              <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="chargeLabels" placement="left">
+              <button
+                onClick={() => toggleOverlay('showChargeMagnitude')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.showChargeMagnitude
+                    ? 'bg-orange-950/60 border-orange-400/70 text-orange-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Magnitude</span>
+                <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showEquipotentials')}
-              className={`px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.showEquipotentials
-                  ? 'bg-pink-950/60 border-pink-500/50 text-pink-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Equipotential</span>
-              <span className="font-mono font-bold">{overlayConfig.showEquipotentials ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="equipotentials" placement="left">
+              <button
+                onClick={() => toggleOverlay('showEquipotentials')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.showEquipotentials
+                    ? 'bg-pink-950/60 border-pink-500/50 text-pink-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Equipotential</span>
+                <span className="font-mono font-bold">{overlayConfig.showEquipotentials ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldVectorGrid')}
-              className={`col-span-2 px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                overlayConfig.showFieldVectorGrid
-                  ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200 shadow-sm'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-cyan-500/50'
-              }`}
-              title="Enable background grid showing E-field vector direction and magnitude at every intersection"
-            >
-              <span className="flex items-center gap-1.5">
-                <Grid3x3 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span>Field Vector Grid (E, |E|)</span>
-              </span>
-              <span className={`font-mono font-bold ${overlayConfig.showFieldVectorGrid ? 'text-cyan-300' : 'text-slate-400'}`}>
-                {overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}
-              </span>
-            </button>
+            <PhysicsTooltip termKey="vectorGrid" placement="left" className="col-span-2">
+              <button
+                onClick={() => toggleOverlay('showFieldVectorGrid')}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldVectorGrid
+                    ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-cyan-500/50'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Grid3x3 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span>Field Vector Grid (E, |E|)</span>
+                </span>
+                <span className={`font-mono font-bold ${overlayConfig.showFieldVectorGrid ? 'text-cyan-300' : 'text-slate-400'}`}>
+                  {overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => {
-                setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
-                toggleOverlay('showProbe');
-              }}
-              className={`col-span-2 px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
-                sensor.isActive && overlayConfig.showProbe
-                  ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-400'
-              }`}
-            >
-              <span>Field &amp; Voltage Probe (|E|, V)</span>
-              <span className="font-mono font-bold">
-                {sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}
-              </span>
-            </button>
+            <PhysicsTooltip termKey="voltageProbe" placement="left" className="col-span-2">
+              <button
+                onClick={() => {
+                  setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
+                  toggleOverlay('showProbe');
+                }}
+                className={`w-full px-2.5 py-2 rounded-xl border font-semibold flex items-center justify-between transition-all ${
+                  sensor.isActive && overlayConfig.showProbe
+                    ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-400'
+                }`}
+              >
+                <span>Field &amp; Voltage Probe (|E|, V)</span>
+                <span className="font-mono font-bold">
+                  {sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            </PhysicsTooltip>
           </div>
         </div>
 
@@ -697,7 +750,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         <div className="space-y-2.5 bg-slate-950/50 p-3 rounded-xl border border-slate-800/80">
           <div>
             <div className="flex justify-between text-xs text-slate-200 mb-1 font-mono tabular-nums">
-              <span>Coulomb Damping (γ)</span>
+              <PhysicsTooltip termKey="coulombDamping" placement="left" as="span" underlineTerm>
+                <span>Coulomb Damping (γ)</span>
+              </PhysicsTooltip>
               <span className="text-emerald-400 font-bold">{overlayConfig.coulombDamping.toFixed(2)}</span>
             </div>
             <input
@@ -715,7 +770,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           <div>
             <div className="flex justify-between text-xs text-slate-200 mb-1 font-mono tabular-nums">
-              <span>Simulation Speed</span>
+              <PhysicsTooltip termKey="simSpeed" placement="left" as="span" underlineTerm>
+                <span>Simulation Speed</span>
+              </PhysicsTooltip>
               <span className="text-cyan-400 font-bold">{overlayConfig.simulationSpeed.toFixed(2)}×</span>
             </div>
             <input
@@ -756,6 +813,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     const polarityText = (q: number) =>
       q > 0.25 ? `+ (${q.toFixed(1)} nC)` : q < -0.25 ? `− (${q.toFixed(1)} nC)` : 'Neutral (0)';
 
+    const activeFoil = getElectroscopeFoilSpec(scopeObj?.foilType);
+
     return (
       <div className="w-full lg:w-[272px] xl:w-[288px] h-full bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 overflow-y-auto flex flex-col gap-2 text-slate-100 shadow-2xl shrink-0">
         {/* Header with Guide Toggle & Reset */}
@@ -766,28 +825,31 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {onToggleGuidedElectroscope && (
-              <button
-                onClick={onToggleGuidedElectroscope}
-                className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors whitespace-nowrap ${
-                  guidedElectroscopeMode
-                    ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                    : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
-                }`}
-                title="Turn step-by-step guidance ON or OFF"
-              >
-                Guide: {guidedElectroscopeMode ? 'ON' : 'OFF'}
-              </button>
+              <PhysicsTooltip termKey="guideToggle" placement="left">
+                <button
+                  onClick={onToggleGuidedElectroscope}
+                  className={`px-2 py-1 rounded-lg border text-xs font-bold transition-colors whitespace-nowrap ${
+                    guidedElectroscopeMode
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                      : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  Guide: {guidedElectroscopeMode ? 'ON' : 'OFF'}
+                </button>
+              </PhysicsTooltip>
             )}
-            <button
-              onClick={onResetScene}
-              className="px-2 py-1 text-xs font-semibold text-slate-200 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
-            >
-              Reset
-            </button>
+            <PhysicsTooltip termKey="resetScene" placement="left">
+              <button
+                onClick={onResetScene}
+                className="px-2 py-1 text-xs font-semibold text-slate-200 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
+              >
+                Reset
+              </button>
+            </PhysicsTooltip>
           </div>
         </div>
 
-        {/* 1. Gold-Leaf Electroscope Live Instrument Panel */}
+        {/* 1. Electroscope Live Instrument Panel */}
         {scopeObj ? (
           <div
             className={`p-2.5 rounded-xl space-y-2 shadow-lg shrink-0 border transition-all ${
@@ -796,10 +858,88 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 : 'bg-slate-950/90 border-amber-400/45'
             }`}
           >
+            {/* Foil Leaf Material Selector (Prominent 2x2 Grid) */}
+            <div className="space-y-1.5 bg-slate-900/90 border border-amber-400/45 rounded-xl p-2">
+              <div className="flex items-center justify-between text-xs">
+                <PhysicsTooltip termKey="goldLeaves" placement="left" as="span" underlineTerm>
+                  <span className="font-extrabold text-amber-300">Change Foil Material</span>
+                </PhysicsTooltip>
+                <span className="font-mono text-[11px] text-slate-200 font-semibold">
+                  {activeFoil.sensitivityLabel}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ELECTROSCOPE_FOIL_LIST.map((foil) => {
+                  const isActive = activeFoil.id === foil.id;
+                  const tipKey =
+                    foil.id === 'gold'
+                      ? 'foilGold'
+                      : foil.id === 'aluminum'
+                      ? 'foilAluminum'
+                      : foil.id === 'copper'
+                      ? 'foilCopper'
+                      : 'foilGumWrapper';
+                  return (
+                    <PhysicsTooltip key={foil.id} termKey={tipKey} placement="left">
+                      <button
+                        onClick={() => {
+                          const scopeName =
+                            foil.id === 'gold'
+                              ? 'Gold-Leaf Electroscope'
+                              : foil.id === 'aluminum'
+                              ? 'Aluminum-Foil Electroscope'
+                              : foil.id === 'copper'
+                              ? 'Copper-Foil Electroscope'
+                              : 'Gum-Wrapper Electroscope';
+                          updateScope({ foilType: foil.id, name: scopeName });
+                        }}
+                        className={`w-full py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-between gap-1.5 transition-all ${
+                          isActive
+                            ? 'bg-slate-800 text-white border border-amber-400 shadow-sm'
+                            : 'bg-slate-950/75 text-slate-300 hover:text-white hover:bg-slate-800/60 border border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/30"
+                            style={{ backgroundColor: foil.swatchColor }}
+                          />
+                          <span className="truncate">{foil.shortName}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {foil.baseTag}
+                        </span>
+                      </button>
+                    </PhysicsTooltip>
+                  );
+                })}
+              </div>
+
+              {/* Clean Material Chemistry & Physics Readout */}
+              <div className="bg-slate-950/80 border border-slate-800/80 rounded-lg px-2 py-1.5 text-[11px] text-slate-300 space-y-0.5">
+                <div className="flex items-center justify-between font-mono text-slate-200 gap-1">
+                  <span className="font-semibold truncate">{activeFoil.chemicalFormula}</span>
+                  <span className="text-cyan-300 shrink-0">W={activeFoil.workFunctionEv.toFixed(2)} eV</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-400 font-mono flex-wrap">
+                  <span>ρ={activeFoil.densityGCm3.toFixed(2)} g/cm³</span>
+                  <span aria-hidden="true">·</span>
+                  <span>t={activeFoil.thicknessUm} µm</span>
+                  <span aria-hidden="true">·</span>
+                  <span>σ={activeFoil.arealMassMgCm2.toFixed(2)} mg/cm²</span>
+                </div>
+                <div className="text-slate-300 leading-snug">
+                  {activeFoil.surfaceChemistry}
+                </div>
+              </div>
+            </div>
+
             {/* Leaf Divergence Gauge */}
             <div className="space-y-1">
               <div className="flex items-baseline justify-between font-mono tabular-nums">
-                <span className="text-[13px] font-semibold text-slate-200">Leaf Angle θ</span>
+                <PhysicsTooltip termKey="leafAngle" placement="left" as="span" underlineTerm>
+                  <span className="text-[13px] font-semibold text-slate-200">Leaf Angle θ</span>
+                </PhysicsTooltip>
                 <span className="text-xl font-extrabold text-amber-300">
                   {leafAngle.toFixed(1)}°
                 </span>
@@ -815,19 +955,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             {/* Knob / Leaf / Net Q Telemetry */}
             <div className="grid grid-cols-1 gap-1 bg-slate-900/80 border border-slate-800/80 rounded-lg p-2 text-xs font-mono tabular-nums">
               <div className="flex justify-between">
-                <span className="text-slate-400">Net Charge Q:</span>
+                <PhysicsTooltip termKey="netCharge" placement="left" as="span" underlineTerm>
+                  <span className="text-slate-400">Net Charge Q:</span>
+                </PhysicsTooltip>
                 <span className={scopeNetQ > 0.15 ? 'text-cyan-300 font-bold' : scopeNetQ < -0.15 ? 'text-pink-300 font-bold' : 'text-slate-200 font-bold'}>
                   {scopeNetQ > 0.05 ? `+${scopeNetQ.toFixed(1)}` : scopeNetQ.toFixed(1)} nC
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Brass Knob:</span>
+                <PhysicsTooltip termKey="brassKnob" placement="left" as="span" underlineTerm>
+                  <span className="text-slate-400">Brass Knob:</span>
+                </PhysicsTooltip>
                 <span className={knobQ > 0.25 ? 'text-cyan-300 font-bold' : knobQ < -0.25 ? 'text-pink-300 font-bold' : 'text-slate-200'}>
                   {polarityText(knobQ)}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Gold Leaves:</span>
+                <PhysicsTooltip termKey="goldLeaves" placement="left" as="span" underlineTerm>
+                  <span className="text-slate-400">{activeFoil.shortName} Leaves:</span>
+                </PhysicsTooltip>
                 <span className={leafQ > 0.25 ? 'text-cyan-300 font-bold' : leafQ < -0.25 ? 'text-pink-300 font-bold' : 'text-slate-200'}>
                   {polarityText(leafQ)}
                 </span>
@@ -836,41 +982,46 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
             {/* Ground / Finger Touch & Discharge Actions */}
             <div className="grid grid-cols-2 gap-1.5 text-xs">
-              <button
-                onClick={() => updateScope({ isGrounded: !scopeObj.isGrounded })}
-                className={`px-2 py-2 rounded-xl border font-bold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
-                  scopeObj.isGrounded
-                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm'
-                    : highlightStep4
-                    ? 'bg-emerald-950/75 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/35'
-                    : 'bg-slate-900 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50'
-                }`}
-                title="Touch brass knob with grounded finger (0 V) — unground before removing nearby charged rod to permanently charge by induction!"
-              >
-                <Shield className="w-3.5 h-3.5 shrink-0" />
-                <span>{scopeObj.isGrounded ? 'Grounded (0V)' : 'Ground Knob'}</span>
-              </button>
+              <PhysicsTooltip termKey="groundObject" placement="left">
+                <button
+                  onClick={() => updateScope({ isGrounded: !scopeObj.isGrounded })}
+                  className={`w-full px-2 py-2 rounded-xl border font-bold flex items-center justify-center gap-1 transition-all whitespace-nowrap ${
+                    scopeObj.isGrounded
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-sm'
+                      : highlightStep4
+                      ? 'bg-emerald-950/75 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/35'
+                      : 'bg-slate-900 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5 shrink-0" />
+                  <span>{scopeObj.isGrounded ? 'Grounded (0V)' : 'Ground Knob'}</span>
+                </button>
+              </PhysicsTooltip>
 
-              <button
-                onClick={() =>
-                  updateScope({
-                    charge: 0,
-                    leafChargeNc: 0,
-                    knobChargeNc: 0,
-                    isGrounded: false,
-                  })
-                }
-                className="px-2 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/70 text-slate-100 font-semibold transition-colors whitespace-nowrap"
-              >
-                Discharge (0)
-              </button>
+              <PhysicsTooltip termKey="dischargeZero" placement="left">
+                <button
+                  onClick={() =>
+                    updateScope({
+                      charge: 0,
+                      leafChargeNc: 0,
+                      knobChargeNc: 0,
+                      isGrounded: false,
+                    })
+                  }
+                  className="w-full px-2 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/70 text-slate-100 font-semibold transition-colors whitespace-nowrap"
+                >
+                  Discharge (0)
+                </button>
+              </PhysicsTooltip>
             </div>
 
             {/* Quick Pre-Charge Scope for Polarity Testing */}
             <div className="space-y-1">
-              <div className="text-xs font-semibold text-slate-300">
-                Pre-Charge Scope
-              </div>
+              <PhysicsTooltip termKey="preChargeScope" placement="left" as="span" underlineTerm>
+                <div className="text-xs font-semibold text-slate-300">
+                  Pre-Charge Scope
+                </div>
+              </PhysicsTooltip>
               <div className="grid grid-cols-3 gap-1 text-xs font-mono">
                 {[-12, 0, 12].map((qVal) => (
                   <button
@@ -914,13 +1065,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               </span>
             </div>
 
-            <button
-              onClick={() => onSingleRub(selectedObject.id)}
-              className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
-              <span>Rub {selectedObject.name}</span>
-            </button>
+            <PhysicsTooltip termKey="rubSingle" placement="left">
+              <button
+                onClick={() => onSingleRub(selectedObject.id)}
+                className="w-full py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+                <span>Rub {selectedObject.name}</span>
+              </button>
+            </PhysicsTooltip>
 
             <input
               type="range"
@@ -933,28 +1086,34 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             />
 
             <div className="grid grid-cols-3 gap-1.5 text-xs">
-              <button
-                onClick={() => handleUpdateSelectedObject({ charge: 0 })}
-                className="py-1 bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-lg text-slate-200 font-semibold"
-              >
-                Zero (0)
-              </button>
-              <button
-                onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
-                className={`py-1 rounded-lg border font-semibold ${
-                  selectedObject.isPinned
-                    ? 'bg-amber-950/80 border-amber-400 text-amber-300'
-                    : 'bg-slate-900 border-slate-800 text-slate-200'
-                }`}
-              >
-                {selectedObject.isPinned ? 'Pinned' : 'Pin'}
-              </button>
-              <button
-                onClick={() => handleUpdateSelectedObject({ rotation: (selectedObject.rotation + 45) % 360 })}
-                className="py-1 bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-lg text-slate-200 font-semibold"
-              >
-                +45°
-              </button>
+              <PhysicsTooltip termKey="dischargeZero" placement="left">
+                <button
+                  onClick={() => handleUpdateSelectedObject({ charge: 0 })}
+                  className="w-full py-1 bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-lg text-slate-200 font-semibold"
+                >
+                  Zero (0)
+                </button>
+              </PhysicsTooltip>
+              <PhysicsTooltip termKey="pinObject" placement="left">
+                <button
+                  onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
+                  className={`w-full py-1 rounded-lg border font-semibold ${
+                    selectedObject.isPinned
+                      ? 'bg-amber-950/80 border-amber-400 text-amber-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-200'
+                  }`}
+                >
+                  {selectedObject.isPinned ? 'Pinned' : 'Pin'}
+                </button>
+              </PhysicsTooltip>
+              <PhysicsTooltip termKey="rotateObject" placement="left">
+                <button
+                  onClick={() => handleUpdateSelectedObject({ rotation: (selectedObject.rotation + 45) % 360 })}
+                  className="w-full py-1 bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-lg text-slate-200 font-semibold"
+                >
+                  +45°
+                </button>
+              </PhysicsTooltip>
             </div>
           </div>
         ) : (
@@ -971,80 +1130,92 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           </span>
 
           <div className="grid grid-cols-2 gap-1.5 text-xs">
-            <button
-              onClick={() => toggleOverlay('showCharges')}
-              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showCharges
-                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
-              }`}
-            >
-              <span>Charges</span>
-              <span className="font-mono font-bold">{overlayConfig.showCharges ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="chargesDots" placement="left">
+              <button
+                onClick={() => toggleOverlay('showCharges')}
+                className={`w-full px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showCharges
+                    ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                <span>Charges</span>
+                <span className="font-mono font-bold">{overlayConfig.showCharges ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showChargeMagnitude')}
-              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showChargeMagnitude
-                  ? 'bg-orange-950/60 border-orange-400/70 text-orange-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
-              }`}
-            >
-              <span>+/- nC &amp; θ</span>
-              <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="chargeLabels" placement="left">
+              <button
+                onClick={() => toggleOverlay('showChargeMagnitude')}
+                className={`w-full px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showChargeMagnitude
+                    ? 'bg-orange-950/60 border-orange-400/70 text-orange-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                <span>+/- nC &amp; θ</span>
+                <span className="font-mono font-bold">{overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldVectors')}
-              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showFieldVectors
-                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
-              }`}
-            >
-              <span>E-Vectors</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldVectors ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="fieldVectors" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldVectors')}
+                className={`w-full px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldVectors
+                    ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                <span>E-Vectors</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldVectors ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldLines')}
-              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showFieldLines
-                  ? 'bg-sky-950/60 border-sky-500/50 text-sky-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
-              }`}
-            >
-              <span>Field Lines</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="fieldLines" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldLines')}
+                className={`w-full px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldLines
+                    ? 'bg-sky-950/60 border-sky-500/50 text-sky-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                <span>Field Lines</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldLines ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => toggleOverlay('showFieldVectorGrid')}
-              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                overlayConfig.showFieldVectorGrid
-                  ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
-              }`}
-            >
-              <span>Vector Grid</span>
-              <span className="font-mono font-bold">{overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="vectorGrid" placement="left">
+              <button
+                onClick={() => toggleOverlay('showFieldVectorGrid')}
+                className={`w-full px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  overlayConfig.showFieldVectorGrid
+                    ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                <span>Vector Grid</span>
+                <span className="font-mono font-bold">{overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => {
-                setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
-                toggleOverlay('showProbe');
-              }}
-              className={`px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
-                sensor.isActive && overlayConfig.showProbe
-                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
-              }`}
-            >
-              <span>Probe</span>
-              <span className="font-mono font-bold">{sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}</span>
-            </button>
+            <PhysicsTooltip termKey="voltageProbe" placement="left">
+              <button
+                onClick={() => {
+                  setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
+                  toggleOverlay('showProbe');
+                }}
+                className={`w-full px-2 py-1.5 rounded-lg border font-medium flex items-center justify-between transition-all ${
+                  sensor.isActive && overlayConfig.showProbe
+                    ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                    : 'bg-slate-900 border-slate-800 text-slate-300'
+                }`}
+              >
+                <span>Probe</span>
+                <span className="font-mono font-bold">{sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}</span>
+              </button>
+            </PhysicsTooltip>
           </div>
         </div>
       </div>
@@ -1060,12 +1231,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           <Sliders className="w-4 h-4 text-cyan-400" />
           <h2 className="text-sm font-bold text-slate-100">Physics &amp; Controls</h2>
         </div>
-        <button
-          onClick={onResetScene}
-          className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
-        >
-          Reset Scene
-        </button>
+        <PhysicsTooltip termKey="resetScene" placement="left">
+          <button
+            onClick={onResetScene}
+            className="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-rose-300 hover:bg-rose-950/40 border border-slate-800 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Reset Scene
+          </button>
+        </PhysicsTooltip>
       </div>
 
       {/* Live Advanced Electrostatic Telemetry */}
@@ -1074,19 +1247,27 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           Advanced Electrostatic Telemetry
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-400">Probe Potential V:</span>
+          <PhysicsTooltip termKey="voltagePotential" placement="left" as="span" underlineTerm>
+            <span className="text-slate-400">Probe Potential V:</span>
+          </PhysicsTooltip>
           <span className="text-emerald-400 font-bold">{probeData.voltageV} V</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-400">Field Magnitude |E|:</span>
+          <PhysicsTooltip termKey="electricField" placement="left" as="span" underlineTerm>
+            <span className="text-slate-400">Field Magnitude |E|:</span>
+          </PhysicsTooltip>
           <span className="text-pink-400 font-bold">{probeData.fieldMagnitude} N/C</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-400">Components (Ex, Ey):</span>
+          <PhysicsTooltip termKey="fieldComponents" placement="left" as="span" underlineTerm>
+            <span className="text-slate-400">Components (Ex, Ey):</span>
+          </PhysicsTooltip>
           <span className="text-slate-200">{probeData.fieldEx}, {probeData.fieldEy} N/C</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-400">Peak Net Force:</span>
+          <PhysicsTooltip termKey="coulombForce" placement="left" as="span" underlineTerm>
+            <span className="text-slate-400">Peak Net Force:</span>
+          </PhysicsTooltip>
           <span className="text-amber-400 font-bold">{peakForce.toFixed(2)} µN</span>
         </div>
       </div>
@@ -1105,19 +1286,22 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <span className="text-[11px] text-slate-400 font-mono truncate block">{selectedMat.chemicalFormula}</span>
               </div>
             </div>
-            <button
-              onClick={handleDeleteSelected}
-              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/60 rounded-lg transition-colors shrink-0"
-              title="Delete Object"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <PhysicsTooltip termKey="removeObject" placement="left">
+              <button
+                onClick={handleDeleteSelected}
+                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/60 rounded-lg transition-colors shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </PhysicsTooltip>
           </div>
 
           {/* Charge Manual Slider */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs font-mono tabular-nums">
-              <span className="text-slate-400">Net Static Charge Q</span>
+              <PhysicsTooltip termKey="netCharge" placement="left" as="span" underlineTerm>
+                <span className="text-slate-400">Net Static Charge Q</span>
+              </PhysicsTooltip>
               <span
                 className={`font-bold text-sm ${
                   selectedObject.charge > 0.05
@@ -1149,63 +1333,79 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {/* Ground, Pin & Rotation Controls */}
           <div className="grid grid-cols-3 gap-1.5 text-xs">
-            <button
-              onClick={() => handleUpdateSelectedObject({ isGrounded: !selectedObject.isGrounded })}
-              className={`px-2 py-1.5 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
-                selectedObject.isGrounded
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/80'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>{selectedObject.isGrounded ? 'Grounded' : 'Ground'}</span>
-            </button>
+            <PhysicsTooltip termKey="groundObject" placement="left">
+              <button
+                onClick={() => handleUpdateSelectedObject({ isGrounded: !selectedObject.isGrounded })}
+                className={`w-full px-2 py-1.5 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
+                  selectedObject.isGrounded
+                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/80'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{selectedObject.isGrounded ? 'Grounded' : 'Ground'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
-              className={`px-2 py-1.5 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
-                selectedObject.isPinned
-                  ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-sm'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/80'
-              }`}
-            >
-              <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>{selectedObject.isPinned ? 'Pinned' : 'Pin'}</span>
-            </button>
+            <PhysicsTooltip termKey="pinObject" placement="left">
+              <button
+                onClick={() => handleUpdateSelectedObject({ isPinned: !selectedObject.isPinned, vx: 0, vy: 0 })}
+                className={`w-full px-2 py-1.5 rounded-xl border font-medium flex items-center gap-1 justify-center transition-all whitespace-nowrap ${
+                  selectedObject.isPinned
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-sm'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800/80'
+                }`}
+              >
+                <Pin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>{selectedObject.isPinned ? 'Pinned' : 'Pin'}</span>
+              </button>
+            </PhysicsTooltip>
 
-            <button
-              onClick={() =>
-                handleUpdateSelectedObject({ rotation: (selectedObject.rotation + 45) % 360 })
-              }
-              className="px-2 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800/80 text-slate-200 rounded-xl font-medium flex items-center gap-1 justify-center transition-colors whitespace-nowrap"
-            >
-              <RotateCw className="w-3.5 h-3.5 shrink-0" />
-              <span>+45°</span>
-            </button>
+            <PhysicsTooltip termKey="rotateObject" placement="left">
+              <button
+                onClick={() =>
+                  handleUpdateSelectedObject({ rotation: (selectedObject.rotation + 45) % 360 })
+                }
+                className="w-full px-2 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800/80 text-slate-200 rounded-xl font-medium flex items-center gap-1 justify-center transition-colors whitespace-nowrap"
+              >
+                <RotateCw className="w-3.5 h-3.5 shrink-0" />
+                <span>+45°</span>
+              </button>
+            </PhysicsTooltip>
           </div>
 
           {/* Microscopic & Physical Material Properties */}
           <div className="text-xs text-slate-200 leading-snug bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 space-y-1 font-mono tabular-nums">
             <div className="flex justify-between">
-              <span className="text-slate-400">Work Function (W):</span>
+              <PhysicsTooltip termKey="workFunction" placement="left" as="span" underlineTerm>
+                <span className="text-slate-400">Work Function (W):</span>
+              </PhysicsTooltip>
               <span className="text-amber-400 font-bold">{selectedMat.workFunctionEv} eV</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Permittivity (εᵣ):</span>
+              <PhysicsTooltip termKey="permittivity" placement="left" as="span" underlineTerm>
+                <span className="text-slate-400">Permittivity (εᵣ):</span>
+              </PhysicsTooltip>
               <span className="text-pink-400 font-bold">{selectedMat.dielectricConstant}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Mass / Density:</span>
+              <PhysicsTooltip termKey="densityMass" placement="left" as="span" underlineTerm>
+                <span className="text-slate-400">Mass / Density:</span>
+              </PhysicsTooltip>
               <span className="text-slate-200 font-bold">
                 {selectedMat.massGrams} g · {selectedMat.densityGCm3} g/cm³
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Surface Friction (μₖ):</span>
+              <PhysicsTooltip termKey="surfaceFriction" placement="left" as="span" underlineTerm>
+                <span className="text-slate-400">Surface Friction (μₖ):</span>
+              </PhysicsTooltip>
               <span className="text-emerald-400 font-bold">{selectedMat.frictionCoeff.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Tribo Affinity:</span>
+              <PhysicsTooltip termKey="triboAffinity" placement="left" as="span" underlineTerm>
+                <span className="text-slate-400">Tribo Affinity:</span>
+              </PhysicsTooltip>
               <span className={selectedMat.triboOrder >= 0 ? 'text-cyan-400 font-bold' : 'text-pink-400 font-bold'}>
                 {selectedMat.triboOrder >= 0 ? `+${selectedMat.triboOrder} Donor` : `${selectedMat.triboOrder} Acceptor`}
               </span>
@@ -1231,106 +1431,120 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
         {/* Segmented Charge View Buttons */}
         <div className="grid grid-cols-2 gap-1.5 text-xs">
-          <button
-            onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'all_charges' }))}
-            className={`px-2.5 py-1.5 rounded-lg border text-left transition-all ${
-              overlayConfig.chargeViewMode === 'all_charges'
-                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
-                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
-            }`}
-          >
-            <div className="truncate">All Charges</div>
-            <div className="text-[11px] text-slate-400 font-normal">Nuclei (+) &amp; e⁻ (-)</div>
-          </button>
+          <PhysicsTooltip termKey="chargeViewAll" placement="left">
+            <button
+              onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'all_charges' }))}
+              className={`w-full px-2.5 py-1.5 rounded-lg border text-left transition-all ${
+                overlayConfig.chargeViewMode === 'all_charges'
+                  ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              <div className="truncate">All Charges</div>
+              <div className="text-[11px] text-slate-400 font-normal">Nuclei (+) &amp; e⁻ (-)</div>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'excess_and_free' }))}
-            className={`px-2.5 py-1.5 rounded-lg border text-left transition-all ${
-              overlayConfig.chargeViewMode === 'excess_and_free'
-                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
-                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
-            }`}
-          >
-            <div className="truncate">Excess Charges</div>
-            <div className="text-[11px] text-slate-400 font-normal">Net static Q</div>
-          </button>
+          <PhysicsTooltip termKey="chargeViewExcess" placement="left">
+            <button
+              onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'excess_and_free' }))}
+              className={`w-full px-2.5 py-1.5 rounded-lg border text-left transition-all ${
+                overlayConfig.chargeViewMode === 'excess_and_free'
+                  ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              <div className="truncate">Excess Charges</div>
+              <div className="text-[11px] text-slate-400 font-normal">Net static Q</div>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'hidden' }))}
-            className={`px-2.5 py-1.5 rounded-lg border text-left transition-all col-span-2 ${
-              overlayConfig.chargeViewMode === 'hidden'
-                ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
-                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
-            }`}
-          >
-            <div className="truncate">Charges Hidden</div>
-            <div className="text-[11px] text-slate-400 font-normal">Show only macroscopic matter &amp; fields</div>
-          </button>
+          <PhysicsTooltip termKey="chargeViewHidden" placement="left" className="col-span-2">
+            <button
+              onClick={() => setOverlayConfig((prev) => ({ ...prev, chargeViewMode: 'hidden' }))}
+              className={`w-full px-2.5 py-1.5 rounded-lg border text-left transition-all ${
+                overlayConfig.chargeViewMode === 'hidden'
+                  ? 'bg-cyan-950/80 border-cyan-500 text-cyan-200 font-bold shadow-sm'
+                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white'
+              }`}
+            >
+              <div className="truncate">Charges Hidden</div>
+              <div className="text-[11px] text-slate-400 font-normal">Show only macroscopic matter &amp; fields</div>
+            </button>
+          </PhysicsTooltip>
         </div>
 
         {/* Real-time Dynamic Motion Toggles */}
         <div className="pt-1 space-y-1.5 border-t border-slate-800/80">
-          <button
-            onClick={() => toggleOverlay('animateMovingCharges')}
-            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-              overlayConfig.animateMovingCharges
-                ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Moving Electrons Animation</span>
-            </span>
-            <span className={overlayConfig.animateMovingCharges ? 'text-cyan-400 font-bold' : 'text-slate-600'}>
-              {overlayConfig.animateMovingCharges ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="movingElectrons" placement="left">
+            <button
+              onClick={() => toggleOverlay('animateMovingCharges')}
+              className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
+                overlayConfig.animateMovingCharges
+                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Moving Electrons Animation</span>
+              </span>
+              <span className={overlayConfig.animateMovingCharges ? 'text-cyan-400 font-bold' : 'text-slate-600'}>
+                {overlayConfig.animateMovingCharges ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('animateFieldFlow')}
-            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-              overlayConfig.animateFieldFlow
-                ? 'bg-sky-950/60 border-sky-500/50 text-sky-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Field Flow Streamers</span>
-            <span className={overlayConfig.animateFieldFlow ? 'text-sky-400 font-bold' : 'text-slate-600'}>
-              {overlayConfig.animateFieldFlow ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="fieldFlow" placement="left">
+            <button
+              onClick={() => toggleOverlay('animateFieldFlow')}
+              className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
+                overlayConfig.animateFieldFlow
+                  ? 'bg-sky-950/60 border-sky-500/50 text-sky-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Field Flow Streamers</span>
+              <span className={overlayConfig.animateFieldFlow ? 'text-sky-400 font-bold' : 'text-slate-600'}>
+                {overlayConfig.animateFieldFlow ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('liveCoulombMotion')}
-            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-              overlayConfig.liveCoulombMotion
-                ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300 shadow-md'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Live Force Motion (Attract / Repel)</span>
-            </span>
-            <span className={overlayConfig.liveCoulombMotion ? 'text-emerald-400 font-bold' : 'text-slate-600'}>
-              {overlayConfig.liveCoulombMotion ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="liveMotion" placement="left">
+            <button
+              onClick={() => toggleOverlay('liveCoulombMotion')}
+              className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
+                overlayConfig.liveCoulombMotion
+                  ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300 shadow-md'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Live Force Motion (Attract / Repel)</span>
+              </span>
+              <span className={overlayConfig.liveCoulombMotion ? 'text-emerald-400 font-bold' : 'text-slate-600'}>
+                {overlayConfig.liveCoulombMotion ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showHaloGlow')}
-            className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showHaloGlow
-                ? 'bg-pink-950/60 border-pink-500/50 text-pink-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Voltage Potential Halo</span>
-            <span className={overlayConfig.showHaloGlow ? 'text-pink-400 font-bold' : 'text-slate-600'}>
-              {overlayConfig.showHaloGlow ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="haloGlow" placement="left">
+            <button
+              onClick={() => toggleOverlay('showHaloGlow')}
+              className={`w-full px-3 py-2 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showHaloGlow
+                  ? 'bg-pink-950/60 border-pink-500/50 text-pink-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Voltage Potential Halo</span>
+              <span className={overlayConfig.showHaloGlow ? 'text-pink-400 font-bold' : 'text-slate-600'}>
+                {overlayConfig.showHaloGlow ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
         </div>
       </div>
 
@@ -1342,124 +1556,139 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         </span>
 
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <button
-            onClick={() => toggleOverlay('showFieldVectors')}
-            className={`px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showFieldVectors
-                ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>E-Vectors</span>
-            <span className={overlayConfig.showFieldVectors ? 'text-cyan-400' : 'text-slate-600'}>
-              {overlayConfig.showFieldVectors ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="fieldVectors" placement="left">
+            <button
+              onClick={() => toggleOverlay('showFieldVectors')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showFieldVectors
+                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>E-Vectors</span>
+              <span className={overlayConfig.showFieldVectors ? 'text-cyan-400' : 'text-slate-600'}>
+                {overlayConfig.showFieldVectors ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showFieldLines')}
-            className={`px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showFieldLines
-                ? 'bg-sky-950/60 border-sky-500/50 text-sky-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Field Lines</span>
-            <span className={overlayConfig.showFieldLines ? 'text-sky-400' : 'text-slate-600'}>
-              {overlayConfig.showFieldLines ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="fieldLines" placement="left">
+            <button
+              onClick={() => toggleOverlay('showFieldLines')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showFieldLines
+                  ? 'bg-sky-950/60 border-sky-500/50 text-sky-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Field Lines</span>
+              <span className={overlayConfig.showFieldLines ? 'text-sky-400' : 'text-slate-600'}>
+                {overlayConfig.showFieldLines ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showEquipotentials')}
-            className={`px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showEquipotentials
-                ? 'bg-pink-950/60 border-pink-500/50 text-pink-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Equipotential V</span>
-            <span className={overlayConfig.showEquipotentials ? 'text-pink-400' : 'text-slate-600'}>
-              {overlayConfig.showEquipotentials ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="equipotentials" placement="left">
+            <button
+              onClick={() => toggleOverlay('showEquipotentials')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showEquipotentials
+                  ? 'bg-pink-950/60 border-pink-500/50 text-pink-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Equipotential V</span>
+              <span className={overlayConfig.showEquipotentials ? 'text-pink-400' : 'text-slate-600'}>
+                {overlayConfig.showEquipotentials ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showForceVectors')}
-            className={`px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showForceVectors
-                ? 'bg-rose-950/60 border-rose-500/50 text-rose-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Force Vectors</span>
-            <span className={overlayConfig.showForceVectors ? 'text-rose-400' : 'text-slate-600'}>
-              {overlayConfig.showForceVectors ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="forceVectors" placement="left">
+            <button
+              onClick={() => toggleOverlay('showForceVectors')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showForceVectors
+                  ? 'bg-rose-950/60 border-rose-500/50 text-rose-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Force Vectors</span>
+              <span className={overlayConfig.showForceVectors ? 'text-rose-400' : 'text-slate-600'}>
+                {overlayConfig.showForceVectors ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showAtomicDipoles')}
-            className={`px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showAtomicDipoles
-                ? 'bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Atomic Dipoles</span>
-            <span className={overlayConfig.showAtomicDipoles ? 'text-amber-400' : 'text-slate-600'}>
-              {overlayConfig.showAtomicDipoles ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="atomicDipoles" placement="left">
+            <button
+              onClick={() => toggleOverlay('showAtomicDipoles')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showAtomicDipoles
+                  ? 'bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Atomic Dipoles</span>
+              <span className={overlayConfig.showAtomicDipoles ? 'text-amber-400' : 'text-slate-600'}>
+                {overlayConfig.showAtomicDipoles ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => {
-              setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
-              toggleOverlay('showProbe');
-            }}
-            className={`px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              sensor.isActive && overlayConfig.showProbe
-                ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Voltage Probe</span>
-            <span className={sensor.isActive && overlayConfig.showProbe ? 'text-emerald-400' : 'text-slate-600'}>
-              {sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="voltageProbe" placement="left">
+            <button
+              onClick={() => {
+                setSensor((prev) => ({ ...prev, isActive: !prev.isActive }));
+                toggleOverlay('showProbe');
+              }}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                sensor.isActive && overlayConfig.showProbe
+                  ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Voltage Probe</span>
+              <span className={sensor.isActive && overlayConfig.showProbe ? 'text-emerald-400' : 'text-slate-600'}>
+                {sensor.isActive && overlayConfig.showProbe ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showFieldVectorGrid')}
-            className={`col-span-2 px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showFieldVectorGrid
-                ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/60'
-            }`}
-            title="Enable background grid showing E-field vector direction and magnitude at every intersection"
-          >
-            <span className="flex items-center gap-1.5">
-              <Grid3x3 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span>Field Vector Grid (E, |E|)</span>
-            </span>
-            <span className={overlayConfig.showFieldVectorGrid ? 'text-cyan-300 font-bold' : 'text-slate-600'}>
-              {overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="vectorGrid" placement="left" className="col-span-2">
+            <button
+              onClick={() => toggleOverlay('showFieldVectorGrid')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showFieldVectorGrid
+                  ? 'bg-cyan-950/75 border-cyan-400 text-cyan-200 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-800/60'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Grid3x3 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span>Field Vector Grid (E, |E|)</span>
+              </span>
+              <span className={overlayConfig.showFieldVectorGrid ? 'text-cyan-300 font-bold' : 'text-slate-600'}>
+                {overlayConfig.showFieldVectorGrid ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
 
-          <button
-            onClick={() => toggleOverlay('showChargeMagnitude')}
-            className={`col-span-2 px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
-              overlayConfig.showChargeMagnitude
-                ? 'bg-orange-950/60 border-orange-400/70 text-orange-300 shadow-sm'
-                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Charge Magnitude Labels (+/- nC)</span>
-            <span className={overlayConfig.showChargeMagnitude ? 'text-orange-400 font-bold' : 'text-slate-600'}>
-              {overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          <PhysicsTooltip termKey="chargeLabels" placement="left" className="col-span-2">
+            <button
+              onClick={() => toggleOverlay('showChargeMagnitude')}
+              className={`w-full px-3 py-2 rounded-xl border font-medium flex items-center justify-between transition-all ${
+                overlayConfig.showChargeMagnitude
+                  ? 'bg-orange-950/60 border-orange-400/70 text-orange-300 shadow-sm'
+                  : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Charge Magnitude Labels (+/- nC)</span>
+              <span className={overlayConfig.showChargeMagnitude ? 'text-orange-400 font-bold' : 'text-slate-600'}>
+                {overlayConfig.showChargeMagnitude ? 'ON' : 'OFF'}
+              </span>
+            </button>
+          </PhysicsTooltip>
         </div>
       </div>
 
@@ -1473,7 +1702,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         {/* Coulomb Damping Slider */}
         <div>
           <div className="flex justify-between text-xs text-slate-300 mb-1 font-mono tabular-nums">
-            <span>Coulomb Damping (γ)</span>
+            <PhysicsTooltip termKey="coulombDamping" placement="left" as="span" underlineTerm>
+              <span>Coulomb Damping (γ)</span>
+            </PhysicsTooltip>
             <span className="text-emerald-400 font-bold">{overlayConfig.coulombDamping.toFixed(2)}</span>
           </div>
           <input
@@ -1505,10 +1736,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         {/* Relative Humidity Slider */}
         <div className="pt-2 border-t border-slate-800/70">
           <div className="flex justify-between text-xs text-slate-200 mb-1 font-mono tabular-nums">
-            <span className="flex items-center gap-1">
-              <Droplets className="w-3.5 h-3.5 text-blue-400" />
-              Air Humidity (Leak)
-            </span>
+            <PhysicsTooltip termKey="humidityLeak" placement="left" as="span" underlineTerm>
+              <span className="flex items-center gap-1">
+                <Droplets className="w-3.5 h-3.5 text-blue-400" />
+                Air Humidity (Leak)
+              </span>
+            </PhysicsTooltip>
             <span className="text-cyan-400 font-bold">{overlayConfig.humidityPercent}%</span>
           </div>
           <input
@@ -1526,15 +1759,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         {/* Known SI Constants & Breakdown Constraint */}
         <div className="text-[11px] text-slate-300 bg-slate-900/70 p-2.5 rounded-lg border border-slate-800/80 space-y-1 font-mono tabular-nums">
           <div className="flex justify-between">
-            <span className="text-slate-400">Coulomb Constant kₑ:</span>
+            <PhysicsTooltip termKey="coulombConstant" placement="left" as="span" underlineTerm>
+              <span className="text-slate-400">Coulomb Constant kₑ:</span>
+            </PhysicsTooltip>
             <span className="text-slate-100">8.99×10⁹ N·m²/C²</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-400">Air Viscosity η (20°C):</span>
+            <PhysicsTooltip termKey="airViscosity" placement="left" as="span" underlineTerm>
+              <span className="text-slate-400">Air Viscosity η (20°C):</span>
+            </PhysicsTooltip>
             <span className="text-slate-100">{(AIR_VISCOSITY_ETA * 1e5).toFixed(2)}×10⁻⁵ Pa·s</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-400">Paschen Breakdown E_bd:</span>
+            <PhysicsTooltip termKey="ionization" placement="left" as="span" underlineTerm>
+              <span className="text-slate-400">Paschen Breakdown E_bd:</span>
+            </PhysicsTooltip>
             <span className="text-amber-400 font-semibold">
               {(getAirBreakdownThreshold(overlayConfig.humidityPercent) / 1e6).toFixed(2)} MV/m
             </span>

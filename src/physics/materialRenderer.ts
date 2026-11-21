@@ -1,4 +1,5 @@
 import { ElectroObject } from '../types/electrostatics';
+import { getElectroscopeFoilSpec } from './electroscopeFoils';
 
 /**
  * Draws realistic, high-fidelity procedural textures and 3D-shaded substances
@@ -1197,7 +1198,8 @@ function drawGoldLeafElectroscope(
   ctx.roundRect(-9, hingeY - 5, 18, 9, 3);
   ctx.fill();
 
-  // 4. Dual 24k Gold-Foil Leaves rotated by ±leafAngleDeg
+  // 4. Dual Metallic Foil Leaves (24k Gold Au, Aluminum Al, or Copper Cu) rotated by ±leafAngleDeg
+  const foil = getElectroscopeFoilSpec(obj.foilType);
   const leafAngleDeg = Math.max(0, Math.min(72, obj.leafAngleDeg ?? 0));
   const leafAngleRad = (leafAngleDeg * Math.PI) / 180;
   const leafQ = obj.leafChargeNc ?? obj.charge * 0.55;
@@ -1209,20 +1211,20 @@ function drawGoldLeafElectroscope(
     ctx.translate(side * 2.5, hingeY);
     ctx.rotate(side * (-leafAngleRad + shimmer));
 
-    const goldGrad = ctx.createLinearGradient(-4, 0, 4, leafLen);
-    goldGrad.addColorStop(0, '#fef08a');
-    goldGrad.addColorStop(0.35, '#facc15');
-    goldGrad.addColorStop(0.75, '#eab308');
-    goldGrad.addColorStop(1, '#ca8a04');
+    const foilGrad = ctx.createLinearGradient(-4, 0, 4, leafLen);
+    foilGrad.addColorStop(0, foil.gradStops[0]);
+    foilGrad.addColorStop(0.35, foil.gradStops[1]);
+    foilGrad.addColorStop(0.75, foil.gradStops[2]);
+    foilGrad.addColorStop(1, foil.gradStops[3]);
 
     if (absLeafQ > 0.25) {
       ctx.shadowColor = leafQ > 0 ? 'rgba(56, 189, 248, 0.72)' : 'rgba(236, 72, 153, 0.75)';
       ctx.shadowBlur = Math.min(14, 4 + absLeafQ * 0.7);
     }
 
-    ctx.fillStyle = goldGrad;
-    ctx.strokeStyle = '#fef9c3';
-    ctx.lineWidth = 0.9;
+    ctx.fillStyle = foilGrad;
+    ctx.strokeStyle = foil.strokeColor;
+    ctx.lineWidth = 0.95;
     ctx.beginPath();
     ctx.moveTo(-2.5, 0);
     ctx.lineTo(2.5, 0);
@@ -1231,6 +1233,46 @@ function drawGoldLeafElectroscope(
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+
+    // Subtle metallic foil micro-sheen / bilayer detail
+    if (foil.id === 'aluminum') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(-1.4, leafLen * 0.22);
+      ctx.lineTo(1.8, leafLen * 0.36);
+      ctx.moveTo(-1.8, leafLen * 0.58);
+      ctx.lineTo(1.6, leafLen * 0.74);
+      ctx.stroke();
+    } else if (foil.id === 'copper') {
+      ctx.strokeStyle = 'rgba(255, 237, 213, 0.40)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-0.8, 3);
+      ctx.lineTo(-1.2, leafLen - 4);
+      ctx.stroke();
+    } else if (foil.id === 'gum_wrapper') {
+      // Inner matte cellulose paper backing strip visible along the laminate edge
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.moveTo(side < 0 ? 1.1 : -2.5, 1);
+      ctx.lineTo(side < 0 ? 2.4 : -1.1, 1);
+      ctx.lineTo(side < 0 ? 3.6 : -2.1, leafLen - 1);
+      ctx.lineTo(side < 0 ? 2.1 : -3.6, leafLen - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      // Subtle diamond crinkle highlights on the silver foil face
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.52)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let k = 0.2; k <= 0.8; k += 0.25) {
+        const y0 = leafLen * k;
+        ctx.moveTo(-2.0, y0);
+        ctx.lineTo(1.5, y0 + 4);
+      }
+      ctx.stroke();
+    }
 
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
@@ -1363,12 +1405,12 @@ function drawGoldLeafElectroscope(
     ctx.restore();
   }
 
-  // Subtle base plate label
-  ctx.fillStyle = 'rgba(226, 232, 240, 0.78)';
+  // Subtle base plate label showing active foil tag & deflection angle
+  ctx.fillStyle = 'rgba(226, 232, 240, 0.86)';
   ctx.font = 'bold 9.5px JetBrains Mono, monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`θ = ${leafAngleDeg.toFixed(0)}°`, 0, baseTop + baseH / 2 + 0.5);
+  ctx.fillText(`${foil.baseTag} · θ = ${leafAngleDeg.toFixed(0)}°`, 0, baseTop + baseH / 2 + 0.5);
 }
 
 function drawPointChargeOrb(

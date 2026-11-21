@@ -10,8 +10,10 @@ import {
   InterfaceChargeParticle,
   FieldStreamParticle,
   ModuleMode,
+  ElectroscopeFoilId,
 } from '../types/electrostatics';
 import { MATERIALS_DATABASE } from '../physics/materialsData';
+import { ELECTROSCOPE_FOIL_LIST, getElectroscopeFoilSpec } from '../physics/electroscopeFoils';
 import {
   calculateElectricField,
   calculateElectricPotential,
@@ -28,6 +30,7 @@ import {
 } from '../physics/electrostaticsEngine';
 import { drawRealisticMaterialBody, drawSurfaceChargeShimmer } from '../physics/materialRenderer';
 import { getElectroscopeGuideState } from '../utils/electroscopeGuide';
+import { PhysicsTooltip } from './PhysicsTooltip';
 
 interface SimulationCanvasProps {
   moduleMode?: ModuleMode;
@@ -50,6 +53,7 @@ interface SimulationCanvasProps {
   onRubStagedPrep?: () => void;
   onPlaceStagedPrep?: () => void;
   onCancelStagedPrep?: () => void;
+  onChangeElectroscopeFoil?: (foilId: ElectroscopeFoilId) => void;
 }
 
 export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
@@ -73,6 +77,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   onRubStagedPrep,
   onPlaceStagedPrep,
   onCancelStagedPrep,
+  onChangeElectroscopeFoil,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2236,7 +2241,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             : moduleMode === 'module3'
             ? 'Point Charges Stage'
             : moduleMode === 'module4'
-            ? 'Gold-Leaf Electroscope'
+            ? `${getElectroscopeFoilSpec(objects.find((o) => o.shape === 'electroscope')?.foilType).shortName} Electroscope`
             : 'Multi-Object Stage'}
         </span>
         {moduleMode === 'module3' && objects.length === 1 && (
@@ -2291,13 +2296,14 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                 </span>
               </div>
               {onCancelStagedPrep && (
-                <button
-                  onClick={onCancelStagedPrep}
-                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                  title="Pick a different object"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                <PhysicsTooltip termKey="removeObject" placement="right">
+                  <button
+                    onClick={onCancelStagedPrep}
+                    className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </PhysicsTooltip>
               )}
             </div>
 
@@ -2361,43 +2367,47 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             {/* Required Sequential Buttons: 1. Rub -> 2. Place */}
             <div className="space-y-1.5">
               {!isGround && (
-                <button
-                  onClick={() => {
-                    setIsPrepRubbing(true);
-                    onRubStagedPrep?.();
-                  }}
-                  className={`w-full py-2.5 px-3 rounded-xl font-extrabold text-[13px] flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
-                    !isCharged
-                      ? 'bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 shadow-lg ring-2 ring-amber-200 animate-pulse'
-                      : 'bg-amber-950/70 hover:bg-amber-900/70 border border-amber-400/70 text-amber-200'
-                  }`}
-                >
-                  <Sparkles className={`w-4 h-4 ${!isCharged ? 'fill-slate-950' : 'text-amber-300'}`} />
-                  <span>{isCharged ? '1. Rub Again (+More Charge)' : '1. Rub to Charge Object'}</span>
-                </button>
+                <PhysicsTooltip termKey="rubSingle" placement="right">
+                  <button
+                    onClick={() => {
+                      setIsPrepRubbing(true);
+                      onRubStagedPrep?.();
+                    }}
+                    className={`w-full py-2.5 px-3 rounded-xl font-extrabold text-[13px] flex items-center justify-center gap-1.5 transition-all active:scale-95 ${
+                      !isCharged
+                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 shadow-lg ring-2 ring-amber-200 animate-pulse'
+                        : 'bg-amber-950/70 hover:bg-amber-900/70 border border-amber-400/70 text-amber-200'
+                    }`}
+                  >
+                    <Sparkles className={`w-4 h-4 ${!isCharged ? 'fill-slate-950' : 'text-amber-300'}`} />
+                    <span>{isCharged ? '1. Rub Again (+More Charge)' : '1. Rub to Charge Object'}</span>
+                  </button>
+                </PhysicsTooltip>
               )}
 
-              <button
-                onClick={() => onPlaceStagedPrep?.()}
-                disabled={!canPlace}
-                className={`w-full py-2.5 px-3 rounded-xl border font-extrabold text-[13px] flex items-center justify-center gap-1.5 transition-all ${
-                  canPlace
-                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 shadow-lg active:scale-95'
-                    : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
-                }`}
-              >
-                {canPlace ? (
-                  <>
-                    <Check className="w-4 h-4 shrink-0" />
-                    <span>{isGround ? 'Place Ground Plate →' : '2. Place on Stage →'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-3.5 h-3.5 shrink-0" />
-                    <span>2. Rub Above to Unlock Place</span>
-                  </>
-                )}
-              </button>
+              <PhysicsTooltip termKey="placeStagedObject" placement="right">
+                <button
+                  onClick={() => onPlaceStagedPrep?.()}
+                  disabled={!canPlace}
+                  className={`w-full py-2.5 px-3 rounded-xl border font-extrabold text-[13px] flex items-center justify-center gap-1.5 transition-all ${
+                    canPlace
+                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-300 shadow-lg active:scale-95'
+                      : 'bg-slate-950 border-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {canPlace ? (
+                    <>
+                      <Check className="w-4 h-4 shrink-0" />
+                      <span>{isGround ? 'Place Ground Plate →' : '2. Place on Stage →'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                      <span>2. Rub Above to Unlock Place</span>
+                    </>
+                  )}
+                </button>
+              </PhysicsTooltip>
             </div>
           </div>
         );
@@ -2436,41 +2446,108 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             </div>
 
             {onToggleGuidedElectroscope && (
-              <button
-                onClick={onToggleGuidedElectroscope}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 whitespace-nowrap shrink-0 transition-colors"
-                title="Turn off step-by-step guidance"
-              >
-                Turn Off Guide
-              </button>
+              <PhysicsTooltip termKey="guideToggle" placement="top">
+                <button
+                  onClick={onToggleGuidedElectroscope}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 whitespace-nowrap shrink-0 transition-colors"
+                >
+                  Turn Off Guide
+                </button>
+              </PhysicsTooltip>
             )}
           </div>
         );
       })()}
 
       {onToggleExpandStage && (
-        <button
-          onClick={onToggleExpandStage}
-          className={`absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-md backdrop-blur-md ${
-            isStageExpanded
-              ? 'bg-orange-950/85 border-orange-400 text-orange-200 hover:bg-orange-900/90'
-              : 'bg-slate-900/85 border-slate-700 text-slate-200 hover:border-cyan-400/70 hover:text-cyan-300'
-          }`}
-          title={isStageExpanded ? 'Show side material & control panels' : 'Hide side panels for full-width view'}
-        >
-          {isStageExpanded ? (
-            <>
-              <Minimize2 className="w-3.5 h-3.5" />
-              <span>Show Panels</span>
-            </>
-          ) : (
-            <>
-              <Maximize2 className="w-3.5 h-3.5" />
-              <span>Expand Stage</span>
-            </>
-          )}
-        </button>
+        <div className="absolute top-2.5 right-2.5 z-10">
+          <PhysicsTooltip termKey="expandStage" placement="left">
+            <button
+              onClick={onToggleExpandStage}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-md backdrop-blur-md ${
+                isStageExpanded
+                  ? 'bg-orange-950/85 border-orange-400 text-orange-200 hover:bg-orange-900/90'
+                  : 'bg-slate-900/85 border-slate-700 text-slate-200 hover:border-cyan-400/70 hover:text-cyan-300'
+              }`}
+            >
+              {isStageExpanded ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  <span>Show Panels</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Expand Stage</span>
+                </>
+              )}
+            </button>
+          </PhysicsTooltip>
+        </div>
       )}
+
+      {/* Prominent On-Stage Foil Leaf Material Selector in Module 4 */}
+      {moduleMode === 'module4' && onChangeElectroscopeFoil && (() => {
+        const scopeObj = objects.find((o) => o.shape === 'electroscope');
+        if (!scopeObj) return null;
+        const activeFoil = getElectroscopeFoilSpec(scopeObj.foilType);
+        return (
+          <div className="absolute top-12 right-2.5 z-10 w-[198px] bg-slate-900/92 backdrop-blur-md border border-amber-400/60 rounded-xl p-2 shadow-xl space-y-1.5">
+            <div className="flex items-center justify-between gap-1">
+              <PhysicsTooltip termKey="goldLeaves" placement="left" as="span" underlineTerm>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
+                  Change Foil Leaf
+                </span>
+              </PhysicsTooltip>
+              <span className="text-[10px] font-mono text-slate-300 font-semibold">
+                {activeFoil.baseTag}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1">
+              {ELECTROSCOPE_FOIL_LIST.map((foil) => {
+                const isActive = activeFoil.id === foil.id;
+                const tipKey =
+                  foil.id === 'gold'
+                    ? 'foilGold'
+                    : foil.id === 'aluminum'
+                    ? 'foilAluminum'
+                    : foil.id === 'copper'
+                    ? 'foilCopper'
+                    : 'foilGumWrapper';
+                return (
+                  <PhysicsTooltip key={foil.id} termKey={tipKey} placement="left">
+                    <button
+                      onClick={() => onChangeElectroscopeFoil(foil.id)}
+                      className={`w-full px-1.5 py-1.5 rounded-lg border text-left transition-all ${
+                        isActive
+                          ? 'bg-slate-800 border-amber-400 text-white shadow-sm'
+                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-600 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/30"
+                          style={{ backgroundColor: foil.swatchColor }}
+                        />
+                        <span className="text-[11px] font-bold truncate">{foil.shortName}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-400 truncate mt-0.5">
+                        {foil.symbol} · {foil.arealMassMgCm2}mg
+                      </div>
+                    </button>
+                  </PhysicsTooltip>
+                );
+              })}
+            </div>
+
+            <div className="text-[10px] font-mono text-slate-300 border-t border-slate-800 pt-1 flex items-center justify-between">
+              <span>W={activeFoil.workFunctionEv.toFixed(2)}eV</span>
+              <span className="text-amber-300">{activeFoil.sensitivityLabel}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Compact Charge Animation Legend in Bottom-Left Corner */}
       <div className="absolute bottom-2 left-2.5 z-10 flex items-center gap-2.5 bg-slate-900/88 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-800 text-xs text-slate-200 shadow-md font-mono">

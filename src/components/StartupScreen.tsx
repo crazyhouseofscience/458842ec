@@ -314,7 +314,7 @@ export const StartupScreen: React.FC<StartupScreenProps> = ({
                   </div>
 
                   <ul className="space-y-1 text-xs font-mono text-slate-400 pt-1">
-                    <li>• Hinged 24k gold-foil leaves (θ°)</li>
+                    <li>• Gold, Aluminum, Copper &amp; Gum Wrapper foils</li>
                     <li>• Induction &amp; knob conduction</li>
                     <li>• Multiple rubbable lab materials</li>
                   </ul>

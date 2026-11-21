@@ -101,6 +101,8 @@ export interface AtomicDipole {
   magnitude: number;
 }
 
+export type ElectroscopeFoilId = 'gold' | 'aluminum' | 'copper' | 'gum_wrapper';
+
 export interface ElectroObject {
   id: string;
   name: string;
@@ -122,9 +124,10 @@ export interface ElectroObject {
   dipoles: AtomicDipole[];
   colorOverride?: string;
   isDragging?: boolean;
-  leafAngleDeg?: number; // Electroscope gold-leaf half-angle divergence (0 to 68 deg)
+  foilType?: ElectroscopeFoilId; // Active electroscope leaf foil material ('gold' | 'aluminum' | 'copper')
+  leafAngleDeg?: number; // Electroscope foil-leaf half-angle divergence (0 to 72 deg)
   leafAngularVel?: number;
-  leafChargeNc?: number; // Effective charge sitting on gold leaves
+  leafChargeNc?: number; // Effective charge sitting on foil leaves
   knobChargeNc?: number; // Effective charge sitting on top brass collector knob
 }
 

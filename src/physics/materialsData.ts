@@ -258,9 +258,9 @@ export const MATERIALS_DATABASE: Record<string, MaterialDef> = {
   },
   electroscope: {
     id: 'electroscope',
-    name: 'Gold-Leaf Electroscope',
+    name: 'Foil-Leaf Electroscope',
     category: 'conductor',
-    workFunctionEv: 5.10, // Gold (Au) / Brass collector work function
+    workFunctionEv: 5.10, // Default 24k Gold (Au) leaf; switches dynamically to Al (4.28 eV) or Cu (4.65 eV)
     triboOrder: 0,
     dielectricConstant: 1.0,
     conductivity: 1.0,
@@ -269,9 +269,9 @@ export const MATERIALS_DATABASE: Record<string, MaterialDef> = {
     frictionCoeff: 0.40,
     color: '#eab308', // 24k gold & brass
     borderColor: '#ca8a04',
-    chemicalFormula: 'Brass (CuZn) + 24k Gold Foil (Au)',
-    electronAffinityText: 'Isolated conductor assembly (Brass knob, stem & dual gold foil leaves). Approaches induce opposing knob/leaf poles; direct touch transfers charge by conduction.',
-    description: 'Classic laboratory gold-leaf electroscope inside a glass bell jar with protractor scale. Detects static charge magnitude and polarity via electrostatic induction or conduction.'
+    chemicalFormula: 'Brass (CuZn) + Au / Al / Cu / Gum Foil',
+    electronAffinityText: 'Isolated conductor assembly (Brass knob, stem & interchangeable Gold Au, Aluminum Al, Copper Cu, or Gum Wrapper Al/Paper leaves). Approaches induce opposing knob/leaf poles; touch transfers charge by conduction.',
+    description: 'Classic laboratory foil-leaf electroscope inside a glass bell jar with protractor scale. Switch between Gold, Aluminum, Copper, and Gum Wrapper foil leaves to compare work function, oxide/paper backing, and areal mass sensitivity.'
   }
 };
 
